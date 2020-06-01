@@ -3,38 +3,42 @@ library(readr)
 library(ggplot2)
 library(dplyr)
 library(tidyr)
+library(dplyr)
+library(gdata)
 
 ###Defenders DATA####
-###
-data.all <-read.csv("https://www.stat2games.sites.grinnell.edu/data/defenders/getdata.php") 
+
+data.all <-read_csv("https://www.stat2games.sites.grinnell.edu/data/defenders/getdata.php") 
 #data.all <- separate(data = data.all, col = TurretType, into = c("Turret", "Upgrade"), sep = "LV")
+
 data.all <- filter(data.all, Level > 0)
 data.all$Level <- as.factor(data.all$Level)
 data.all$Round <- as.factor(data.all$Wave)
 data.all$Location <- as.factor(data.all$Location)
 data.all$GroupID <- as.character(data.all$GroupID)
 data.all$PlayerID <- as.character(data.all$PlayerID)
-data.all["None"] = NA
+
+#data.all["None"] = NA
 
 #data.all <- filter(data.all, Medicine == "red" | Medicine == "blue")
 #data.all <- filter(data.all, Shot > 0)
 data.all <- mutate(data.all, PercDestroyed = Destroyed/Shot)
 data.all <- mutate(data.all, Missed = Shot - Destroyed)
 ###
-data.all <- mutate(data.all, PerMissed = (Shot - Destroyed)/Shot)
+data.all <- mutate(data.all, PerMissed = Missed/Shot)
 data.all <- mutate(data.all, PerDefective = Destroyed/Shot)
-data.all <- gather(data.all,"Result","Value", PerDefective,PerMissed)
-data.all$Result[data.all$Result == "PerDefective"] <- "Destroyed" 
-data.all$Result[data.all$Result == "PerMissed"] <- "Missed" 
 
-summed1 = sum(data.all$Shot)
-summed2 = sum(data.all$Missed)
-data.all$new = c(summed1, summed2)
-require(dplyr)
-require(gdata)
-###
+#data.all <- gather(data.all,"Result","Value", PerDefective,PerMissed)
+#data.all$Result[data.all$Result == "PerDefective"] <- "Destroyed" 
+#data.all$Result[data.all$Result == "PerMissed"] <- "Missed" 
+
+# summed1 = sum(data.all$Shot)
+# summed2 = sum(data.all$Missed)
+# data.all$new = c(summed1, summed2)
 
 
+
+#To use for inputs
 all_groups <- sort(unique(data.all$GroupID))
 all_players <- sort(unique(data.all$PlayerID))
 
@@ -45,9 +49,7 @@ ui <- fluidPage(
     
     sidebarLayout(
         sidebarPanel(
-         ###   
-            
-        ###    
+      
             selectInput(inputId = "groupID",
                         label = "Group ID:", 
                         choices =  c("all", all_groups),
@@ -70,10 +72,8 @@ ui <- fluidPage(
             selectInput(inputId = "chart",
                         label = "Chart Type",
                         #columns of the dataset
-                        choices = c(
-                                    "Counts",
-                                    "Percent"),
-                        selected = "Dotplot",
+                        choices = c("Counts","Percent"),
+                        selected = "Counts",
                         multiple = FALSE),
             
             selectInput(inputId = "xvar",
@@ -83,17 +83,13 @@ ui <- fluidPage(
                         selected = "Medicine",
                         multiple = FALSE),
             
-        
-           
-            
             selectInput(inputId = "color",
                         label = "Facet by",
                         choices = c("Level", "Round", "Location", "TurretType", "Upgrade", "Medicine", "Virus"),
                         selected = "Virus",
                         multiple = FALSE),
             
-            checkboxInput('ctest',"Chi-Sq Test",FALSE),
-            
+            checkboxInput('ctest',"Chi-Sq Test", FALSE),
             
             downloadButton('downloadData', label = "Defenders Data")
             
@@ -103,7 +99,6 @@ ui <- fluidPage(
             
             plotOutput(outputId = "Plot"),
             verbatimTextOutput("test"),
-            
             p(h4("Observed Table (Must Select Chi-sq test):")),
             verbatimTextOutput("table")
         )
@@ -112,6 +107,27 @@ ui <- fluidPage(
 
 server <- function(input, output,session) {
     
+    #Reactive Data
+    
+    plotDataR <- reactive({
+        if("all" %in% input$groupID){
+            if("all" %in% input$PlayerID){
+                data <- data.all %>% filter(Level %in% input$level)
+            } else {
+                data <- data.all %>% filter(Level %in% input$level, PlayerID %in% input$playerID)
+            }
+            
+        } else{
+            if("all" %in% input$PlayerID){
+                data <- data.all %>% filter(Level %in% input$level, GroupID %in% input$groupID)
+            } else {
+                data <- data.all %>% filter(Level %in% input$level, PlayerID %in% input$playerID, GroupID %in% input$groupID)
+            }
+        }
+    })
+    
+    
+    
     # Updates PlayerID based upon GroupID
     observe({
         # req() requires a selection from GroupID before any output
@@ -119,7 +135,7 @@ server <- function(input, output,session) {
         req(input$groupID)   
         
         if ("all" %in% input$groupID) {gamedata <- data.all}
-        else{gamedata <- filter(data.all, GroupID == input$groupID)}
+        else{gamedata <- filter(data.all, GroupID %in% input$groupID)}
         
         updateSelectInput(session, 
                           "playerID",
@@ -132,7 +148,7 @@ server <- function(input, output,session) {
         req(input$groupID)   
         
         if ("all" %in% input$groupID) {gamedata <- data.all}
-        else{gamedata <- filter(data.all, GroupID == input$groupID)}
+        else{gamedata <- filter(data.all, GroupID %in% input$groupID)}
         updateSelectInput(session, 
                           "levels",
                           choices = sort(unique(gamedata$Level)),
@@ -142,21 +158,10 @@ server <- function(input, output,session) {
     
     output$Plot <- renderPlot({
         req(input$groupID)
-        data.all <- data.all[data.all$Level %in% input$levels, ]
-        
-        if ("all" %in% input$groupID) {plotData <- data.all}
-        else{
-            if("all" %in% input$playerID) {plotData <- data.all[data.all$GroupID %in% input$groupID, ]}
-            else{
-                plotData <- data.all[data.all$GroupID %in% input$groupID, ]
-                plotData = plotData[plotData$PlayerID %in% input$playerID, ]
-            }
-        }
-        
-        
+       
+        #Using Reactive Data
+        plotData <- plotDataR()
 
-        
-        
         if(input$chart == "Percent"){
             DefData1 = plotData
             DefData2 <- mutate(DefData1, PerDefective = Destroyed/Shot)
@@ -181,14 +186,18 @@ server <- function(input, output,session) {
             DefData2 <- mutate(DefData2, Missed = (Shot - Destroyed))
             
             Def.Sum2 <- gather(DefData2,"Result","Value", Destroyed,Missed)
-            myplot = ggplot(Def.Sum2, aes(y = Value, x = eval(parse(text = input$xvar)), fill = forcats::fct_rev(Result))) + 
-                geom_bar(stat = "summary", fun.y = "sum") + 
-                facet_wrap(c("Medicine")) + scale_fill_discrete(name = "Result") + 
-                ylab("Counts") + ggtitle("Chart of Counts Destroyed") + facet_wrap(c(input$color)) + xlab(input$xvar)
+            # myplot = ggplot(Def.Sum2, aes(y = Value, x = eval(parse(text = input$xvar)), fill = forcats::fct_rev(Result))) + 
+            #     geom_bar(stat = "summary", fun.y = "sum") + 
+            #     facet_wrap(c("Medicine")) + scale_fill_discrete(name = "Result") + 
+            #     ylab("Counts") + ggtitle("Chart of Counts Destroyed") + facet_wrap(c(input$color)) + xlab(input$xvar)
+            
         } 
         
         
-        output$table = renderPrint( {
+        output$table = renderPrint({
+          
+          plotData <- plotDataR()
+          
             ##  YVariable = plotData %>% pull(input$yvar)
             XVariable = plotData %>% pull(input$xvar)
             ColorVariable = plotData %>% pull(input$color)
@@ -209,27 +218,17 @@ server <- function(input, output,session) {
             
         })
         
-        myplot
+        return(myplot)
         
     })
     
-   
-   
-     plotData <- reactive({
-        if ("all" %in% input$groupID) {filter(data.all, Level %in% input$levels)}
-        else{
-            if("all" %in% input$playerID)
-            {filter(data.all, GroupID %in% input$groupID, Level %in% input$levels)}
-            else{filter(data.all, GroupID %in% input$groupID, PlayerID %in% input$playerID, Level %in% input$levels)}
-        }
-    })    
-    
+
     output$downloadData <- downloadHandler(
         filename = function() {
             paste('Data-', Sys.Date(), '.csv', sep="")
         },
         content = function(con) {
-            write.csv(plotData(), con)
+            write.csv(plotDataR(), con)
             
         })
     
