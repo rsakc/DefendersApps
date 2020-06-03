@@ -8,7 +8,7 @@ library(tidyr)
 library(dplyr)
 library(gdata)
 library(stats)
-library(viridis)
+library(forcats)
 
 
 #Loading in Defenders Data
@@ -66,34 +66,36 @@ ui <- fluidPage(
                   selectize = TRUE,
                   selected = "all"),
       
-      selectInput("levels", "Level",
+      selectInput("levels", "Level:",
                   choices = c(1, 2, 3, 4, 5),
                   multiple = TRUE,
                   selected = "1"),
       
       selectInput(inputId = "chart",
-                  label = "Chart Type",
+                  label = "Chart Type:",
                   #columns of the dataset
                   choices = c("Counts","Percent"),
                   selected = "Counts",
                   multiple = FALSE),
       
       selectInput(inputId = "xvar",
-                  label = "X Axis:",
+                  label = "X Variable:",
                   #columns of the dataset
                   choices = c("Level", "Round", "Location", "TurretType", "Upgrade", "Medicine", "Virus"),
                   selected = "Medicine",
                   multiple = FALSE),
       
       selectInput(inputId = "facet",
-                  label = "Facet by",
+                  label = "Facet by:",
                   choices = c("None", "Level", "Round", "Location", "TurretType", "Upgrade", "Medicine", "Virus"),
                   selected = "None",
                   multiple = FALSE),
       
       checkboxInput('ctest',"Chi-Sq Test", FALSE),
+      checkboxInput("summary", "Show Summary Statistics (For X Variable)", FALSE),
       
       downloadButton('downloadData', label = "Defenders Data")
+      
       
     ),
     
@@ -101,7 +103,8 @@ ui <- fluidPage(
     mainPanel(
       plotOutput(outputId = "Plot"),
       uiOutput("header"),
-      verbatimTextOutput("table")
+      verbatimTextOutput("table"),
+      tableOutput("summarytable")
     
    
      
@@ -195,16 +198,16 @@ server <- function(input, output,session) {
     if(input$chart == "Counts" & input$facet == "None"){
 
       myplot <- ggplot(data = visual_data, aes_string(x = input$xvar, y = "ShotDestroyed")) +
-        geom_bar(stat = "identity", aes(fill = Indicator)) +
+        geom_bar(stat = "identity", aes(fill = fct_rev(Indicator))) +
         labs(x = input$xvar, y = "Counts", title = paste("Plot of Shot vs Destroyed by",input$xvar, "in Counts")) +
         theme_bw() +
         theme(axis.text.x = element_text(size = 18, angle = 40, hjust = 1), 
               axis.title = element_text(size = 20), 
               plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
-              legend.title = element_text(size = 18), 
+              legend.title = element_blank(), 
               legend.text = element_text(size = 16), 
               axis.text.y = element_text(size = 14)) +
-        scale_fill_brewer(palette = "Dark2")
+        scale_fill_manual(values = c("Destroyed" = "steelblue2", "Missed" = "snow3"))
       
     }
     
@@ -219,35 +222,35 @@ server <- function(input, output,session) {
 
 
       myplot <- ggplot(data = visual_data_p, aes_string(x = input$xvar, y = "Percent")) +
-        geom_bar(stat = "identity", aes(fill = Indicator)) +
+        geom_bar(stat = "identity", aes(fill = fct_rev(Indicator))) +
         scale_y_continuous(labels = scales::percent) +
         labs(x = input$xvar, y = "Percent", title = paste("Plot of Shot vs Destroyed by",input$xvar, "in Percent")) +
         theme_bw() +
         theme(axis.text.x = element_text(size = 18, angle = 40, hjust = 1), 
               axis.title = element_text(size = 20), 
               plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
-              legend.title = element_text(size = 18), 
+              legend.title = element_blank(), 
               legend.text = element_text(size = 16), 
               axis.text.y = element_text(size = 14)) +
-        scale_fill_brewer(palette = "Dark2")
+        scale_fill_manual(values = c("Destroyed" = "steelblue2", "Missed" = "snow3"))
      
     }
     
     if(input$facet != "None" & input$chart == "Counts"){
 
       myplot <- ggplot(data = visual_data, aes_string(x = input$xvar, y = "ShotDestroyed")) +
-        geom_bar(stat = "identity", aes(fill = Indicator)) +
+        geom_bar(stat = "identity", aes(fill = fct_rev(Indicator))) +
         labs(x = input$xvar, y = "Counts", title = paste("Plot of Shot vs Destroyed by",input$xvar, "in Counts")) +
         theme_bw() +
         theme(axis.text.x = element_text(size = 18, angle = 40, hjust = 1), 
               axis.title = element_text(size = 20), 
               plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
-              legend.title = element_text(size = 18), 
+              legend.title = element_blank(), 
               legend.text = element_text(size = 16), 
               axis.text.y = element_text(size = 14)) + 
        facet_wrap(as.formula(paste("~", input$facet))) +
        theme(strip.text = element_text(size = 16)) +
-        scale_fill_brewer(palette = "Dark2")
+        scale_fill_manual(values = c("Destroyed" = "steelblue2", "Missed" = "snow3"))
    
       }
     
@@ -263,19 +266,19 @@ server <- function(input, output,session) {
         mutate(Percent = ShotDestroyed/Total)
       
       myplot <- ggplot(data = visual_data_f, aes_string(x = input$xvar, y = "Percent")) +
-        geom_bar(stat = "identity", aes(fill = Indicator)) +
+        geom_bar(stat = "identity", aes(fill = fct_rev(Indicator))) +
         scale_y_continuous(labels = scales::percent) +
         labs(x = input$xvar, y = "Percent", title = paste("Plot of Shot vs Destroyed by",input$xvar, "in Percent")) +
         theme_bw() +
         theme(axis.text.x = element_text(size = 18, angle = 40, hjust = 1), 
               axis.title = element_text(size = 20), 
               plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
-              legend.title = element_text(size = 18), 
+              legend.title = element_blank(), 
               legend.text = element_text(size = 16), 
               axis.text.y = element_text(size = 14)) +
         facet_wrap(as.formula(paste("~", input$facet))) +
         theme(strip.text = element_text(size = 16)) +
-        scale_fill_brewer(palette = "Dark2")
+        scale_fill_manual(values = c("Destroyed" = "steelblue2", "Missed" = "snow3"))
         
   
     }
@@ -297,7 +300,7 @@ server <- function(input, output,session) {
            group_by_at(input$xvar) %>%
            summarize(Destroyed = sum(Destroyed), Missed = sum(Missed))
           
-         chisq.test(test_data[,2:3]) 
+         chisq.test(test_data[,2:3], correct = FALSE) 
         
        } else {
         
@@ -314,9 +317,40 @@ server <- function(input, output,session) {
       if(input$ctest == "FALSE"){
         output$header <- renderUI({
          ""}) 
-        
+
       }
     })
+    
+    
+    output$summarytable <- renderTable({
+      
+      if(input$summary == "TRUE"){
+      
+      if(input$facet != "None"){
+        vec <- c(input$xvar, input$facet)
+        visual_data <- plotData %>%
+          group_by_at(vec) %>%
+          summarize(Destroyed = sum(Destroyed), Missed = sum(Missed))
+        
+        
+      } else {
+        visual_data <- plotData %>%
+          group_by_at(input$xvar) %>%
+          summarize(Destroyed = sum(Destroyed), Missed = sum(Missed))
+      }
+      
+      }
+
+
+    })
+
+    
+    
+    
+    
+    
+    
+    
 
    
    return(myplot)
