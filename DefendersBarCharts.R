@@ -5,14 +5,12 @@ library(readr)
 library(ggplot2)
 library(dplyr)
 library(tidyr)
-library(dplyr)
 library(gdata)
 library(stats)
-library(forcats)
 
 
 #Loading in Defenders Data
-data.all <-read_csv("https://www.stat2games.sites.grinnell.edu/data/defenders/getdata.php") 
+data.all <- readr::read_csv("https://www.stat2games.sites.grinnell.edu/data/defenders/getdata.php") 
 
 #Filter by Level
 data.all <- data.all %>% filter(Level > 0)
@@ -54,10 +52,10 @@ ui <- fluidPage(
       
       selectInput(inputId = "groupID",
                   label = "Group ID:", 
-                  choices =  c("all", all_groups),
+                  choices =  c(all_groups),
                   multiple = TRUE,
                   selectize = TRUE,
-                  selected = "all"),
+                  selected = "STA310"),
       
       selectInput(inputId = "playerID",
                   label = "Player ID:",
@@ -91,7 +89,12 @@ ui <- fluidPage(
                   selected = "None",
                   multiple = FALSE),
       
-      checkboxInput('ctest',"Chi-Sq Test", FALSE),
+      selectInput(inputId = "tests",
+                  label = "Statistic Tests:",
+                  choices = c("None", "Chi-Sq Test", "Two Proportion Z-Test"),
+                  selected = "None",
+                  multiple = FALSE),
+  
       checkboxInput("summary", "Show Summary Statistics (For X Variable)", FALSE),
       
       downloadButton('downloadData', label = "Defenders Data")
@@ -103,7 +106,8 @@ ui <- fluidPage(
     mainPanel(
       plotOutput(outputId = "Plot"),
       uiOutput("header"),
-      verbatimTextOutput("table"),
+      verbatimTextOutput("chi"),
+      verbatimTextOutput("prop"),
       tableOutput("summarytable")
     
    
@@ -118,20 +122,13 @@ server <- function(input, output,session) {
   
   #Reactive Data
   plotDataR <- reactive({
-    if("all" %in% input$groupID){
-      if("all" %in% input$playerID){
-        data <- data.all %>% filter(Level %in% input$levels)
-      } else {
-        data <- data.all %>% filter(Level %in% input$levels, PlayerID %in% input$playerID)
-      }
-      
-    } else{
+   
       if("all" %in% input$playerID){
         data <- data.all %>% filter(Level %in% input$levels, GroupID %in% input$groupID)
+        
       } else {
         data <- data.all %>% filter(Level %in% input$levels, PlayerID %in% input$playerID, GroupID %in% input$groupID)
       }
-    }
     
     return(data)
   })
@@ -145,8 +142,7 @@ server <- function(input, output,session) {
     # or reactivity occurs (keeps the app from crashing)
     req(input$groupID)   
     
-    if ("all" %in% input$groupID) {gamedata <- data.all}
-    else{gamedata <- filter(data.all, GroupID %in% input$groupID)}
+    gamedata <- filter(data.all, GroupID %in% input$groupID)
     
     updateSelectInput(session, 
                       "playerID",
@@ -159,8 +155,8 @@ server <- function(input, output,session) {
   observe({
     req(input$groupID)   
     
-    if ("all" %in% input$groupID) {gamedata <- data.all}
-    else{gamedata <- filter(data.all, GroupID %in% input$groupID)}
+   
+    gamedata <- filter(data.all, GroupID %in% input$groupID)
     updateSelectInput(session, 
                       "levels",
                       choices = sort(unique(gamedata$Level)),
@@ -198,7 +194,7 @@ server <- function(input, output,session) {
     if(input$chart == "Counts" & input$facet == "None"){
 
       myplot <- ggplot(data = visual_data, aes_string(x = input$xvar, y = "ShotDestroyed")) +
-        geom_bar(stat = "identity", aes(fill = fct_rev(Indicator))) +
+        geom_bar(stat = "identity", aes(fill = Indicator), position = position_stack(reverse = TRUE)) +
         labs(x = input$xvar, y = "Counts", title = paste("Plot of Shot vs Destroyed by",input$xvar, "in Counts")) +
         theme_bw() +
         theme(axis.text.x = element_text(size = 18, angle = 40, hjust = 1), 
@@ -207,7 +203,9 @@ server <- function(input, output,session) {
               legend.title = element_blank(), 
               legend.text = element_text(size = 16), 
               axis.text.y = element_text(size = 14)) +
-        scale_fill_manual(values = c("Destroyed" = "steelblue2", "Missed" = "snow3"))
+        scale_fill_manual(values = c("Destroyed" = "steelblue2", "Missed" = "snow3")) +
+        guides(fill = guide_legend(reverse = TRUE))
+ 
       
     }
     
@@ -222,7 +220,7 @@ server <- function(input, output,session) {
 
 
       myplot <- ggplot(data = visual_data_p, aes_string(x = input$xvar, y = "Percent")) +
-        geom_bar(stat = "identity", aes(fill = fct_rev(Indicator))) +
+        geom_bar(stat = "identity", aes(fill = Indicator), position = position_stack(reverse = TRUE)) +
         scale_y_continuous(labels = scales::percent) +
         labs(x = input$xvar, y = "Percent", title = paste("Plot of Shot vs Destroyed by",input$xvar, "in Percent")) +
         theme_bw() +
@@ -232,14 +230,15 @@ server <- function(input, output,session) {
               legend.title = element_blank(), 
               legend.text = element_text(size = 16), 
               axis.text.y = element_text(size = 14)) +
-        scale_fill_manual(values = c("Destroyed" = "steelblue2", "Missed" = "snow3"))
+        scale_fill_manual(values = c("Destroyed" = "steelblue2", "Missed" = "snow3")) +
+        guides(fill = guide_legend(reverse = TRUE))
      
     }
     
     if(input$facet != "None" & input$chart == "Counts"){
 
       myplot <- ggplot(data = visual_data, aes_string(x = input$xvar, y = "ShotDestroyed")) +
-        geom_bar(stat = "identity", aes(fill = fct_rev(Indicator))) +
+        geom_bar(stat = "identity", aes(fill = Indicator), position = position_stack(reverse = TRUE)) +
         labs(x = input$xvar, y = "Counts", title = paste("Plot of Shot vs Destroyed by",input$xvar, "in Counts")) +
         theme_bw() +
         theme(axis.text.x = element_text(size = 18, angle = 40, hjust = 1), 
@@ -250,7 +249,8 @@ server <- function(input, output,session) {
               axis.text.y = element_text(size = 14)) + 
        facet_wrap(as.formula(paste("~", input$facet))) +
        theme(strip.text = element_text(size = 16)) +
-        scale_fill_manual(values = c("Destroyed" = "steelblue2", "Missed" = "snow3"))
+        scale_fill_manual(values = c("Destroyed" = "steelblue2", "Missed" = "snow3")) +
+        guides(fill = guide_legend(reverse = TRUE))
    
       }
     
@@ -266,7 +266,7 @@ server <- function(input, output,session) {
         mutate(Percent = ShotDestroyed/Total)
       
       myplot <- ggplot(data = visual_data_f, aes_string(x = input$xvar, y = "Percent")) +
-        geom_bar(stat = "identity", aes(fill = fct_rev(Indicator))) +
+        geom_bar(stat = "identity", aes(fill = Indicator), position = position_stack(reverse = TRUE)) +
         scale_y_continuous(labels = scales::percent) +
         labs(x = input$xvar, y = "Percent", title = paste("Plot of Shot vs Destroyed by",input$xvar, "in Percent")) +
         theme_bw() +
@@ -278,17 +278,18 @@ server <- function(input, output,session) {
               axis.text.y = element_text(size = 14)) +
         facet_wrap(as.formula(paste("~", input$facet))) +
         theme(strip.text = element_text(size = 16)) +
-        scale_fill_manual(values = c("Destroyed" = "steelblue2", "Missed" = "snow3"))
+        scale_fill_manual(values = c("Destroyed" = "steelblue2", "Missed" = "snow3")) +
+        guides(fill = guide_legend(reverse = TRUE))
         
   
     }
 
-    output$table = renderPrint({
+    output$chi = renderPrint({
       
       plotData <- plotDataR()
       
  
-       if(input$ctest == "TRUE"){
+       if(input$tests == "Chi-Sq Test"){
          
          if(input$facet == "None"){
            
@@ -311,10 +312,10 @@ server <- function(input, output,session) {
     }
     })
     
-    
-    observeEvent(input$ctest, {
+    #Removing Header if chi-squared/proportions test checkbox is deselected
+    observeEvent(input$tests, {
       
-      if(input$ctest == "FALSE"){
+      if(input$tests == "None"){
         output$header <- renderUI({
          ""}) 
 
@@ -322,6 +323,56 @@ server <- function(input, output,session) {
     })
     
     
+    #Two proportion Z test
+    output$prop <- renderPrint({
+      
+      #Reactive Data
+      plotData <- plotDataR()
+      
+      #Setting Up
+      XVariable <- plotData %>% pull(input$xvar)
+      XVariable <- drop.levels(as.factor(XVariable))
+      xlevel <- nlevels(XVariable)
+      
+      if(input$tests == "Two Proportion Z-Test"){
+        
+        if(input$facet == "None"){
+          
+          if(xlevel == 2){
+          
+          output$header <- renderUI({
+            h4("Observed Table:")
+          }) 
+          
+          test_data <- plotData %>%
+            group_by_at(input$xvar) %>%
+            summarize(Destroyed = sum(Destroyed), Missed = sum(Missed)) %>%
+            mutate(Total = Destroyed + Missed)
+          
+          Destroyed <- test_data$Destroyed
+          Total <- test_data$Total
+          
+          prop.test(Destroyed, Total, correct = FALSE)
+          
+          } else{
+            
+            "X Variable must have exactly two levels to run the two proportion z-test."
+          }
+        
+        } else {
+          
+          "Facet must be set to None to run the two proportion z-test"
+          
+        }
+      }
+      
+    })
+    
+    
+    
+    
+    
+    #Summary table
     output$summarytable <- renderTable({
       
       if(input$summary == "TRUE"){
@@ -330,27 +381,19 @@ server <- function(input, output,session) {
         vec <- c(input$xvar, input$facet)
         visual_data <- plotData %>%
           group_by_at(vec) %>%
-          summarize(Destroyed = sum(Destroyed), Missed = sum(Missed))
+          summarize(Destroyed = as.integer(sum(Destroyed)), Missed = as.integer(sum(Missed)))
         
         
       } else {
         visual_data <- plotData %>%
           group_by_at(input$xvar) %>%
-          summarize(Destroyed = sum(Destroyed), Missed = sum(Missed))
+          summarize(Destroyed = as.integer(sum(Destroyed)), Missed = as.integer(sum(Missed)))
       }
       
       }
 
 
     })
-
-    
-    
-    
-    
-    
-    
-    
 
    
    return(myplot)
