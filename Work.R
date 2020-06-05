@@ -18,8 +18,8 @@ test3 <- test3 %>%
 
 test4 <- data.all %>%
   group_by(Virus, Medicine) %>%
-  summarize(Destroyed = sum(Destroyed), Missed = sum(Missed)) %>%
-  gather("Destroyed", "Missed", key = "Indicator", value = "ShotDestroyed")
+  summarize(Missed = sum(Missed), Destroyed = sum(Destroyed)) %>%
+  gather("Missed", "Destroyed", key = "Indicator", value = "ShotDestroyed")
 
 
 total <- test4 %>%
@@ -29,7 +29,7 @@ total <- test4 %>%
 test5 <- inner_join(test4, total) %>%
   mutate(Percent = ShotDestroyed/Total)
 
-
+test_7 <- as.matrix(test4)
 
   
   ggplot(test4, aes(x = Virus, y = ShotDestroyed)) + 
@@ -41,7 +41,12 @@ test5 <- inner_join(test4, total) %>%
     group_by(Virus) %>%
     summarize(Destroyed = sum(Destroyed), Missed = sum(Missed))
   
+  test8 <- data.all %>%
+    group_by(Virus) %>%
+    summarize(Missed = sum(Missed), Destroyed = sum(Destroyed))
   
+  
+  test9 <- as.matrix.data.frame(test8)
   
   
   
