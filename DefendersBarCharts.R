@@ -7,6 +7,7 @@ library(dplyr)
 library(tidyr)
 library(gdata)
 library(stats)
+library(curl)
 
 
 #Loading in Defenders Data
