@@ -1,0 +1,348 @@
+---
+title: "Defenders Analysis Upgrades"
+author: "Riu Sakaguchi"
+date: "6/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+```
+ 
+
+```{r Libraries}
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(gdata)
+library(stats)
+library(stringr)
+```
+
+
+```{r Loading Data}
+#Data
+data <- readr::read_csv("https://www.stat2games.sites.grinnell.edu/data/defenders/getdata.php")
+
+#Keeping Data after August 2nd
+data <- data %>% mutate(Date = str_sub(Date, 1, 10))
+data$Date <- as.Date(data$Date, format = "%Y-%m-%d")
+data <- data %>% filter(Date >= as.Date("08/02/2019", format = "%m/%d/%Y"))
+
+#Making Location and Virus a factor
+data$Location <- as.factor(data$Location)
+data$Virus <- as.factor(data$Virus)
+
+#Arranging data
+data <- data %>% arrange(GameNum)
+```
+
+
+```{r User Selection}
+#Choose Level/Wave/Virus
+level <- 1
+wave <- 1
+
+#For all data, include both red and blue
+virus <- c("red", "blue")
+```
+
+
+```{r Restricting Data}
+#Filering level and wave
+data <- data %>% filter(Level == level, Wave == wave)
+
+#Removing Gamenum -1
+data <- data %>% filter(!(GameNum == -1))
+
+
+#Removing if there werent exactly 2 locations
+Index <- numeric()
+
+for(i in unique(data$GameNum)){
+  
+  temp <- data %>% filter(GameNum == i)
+  temp$Location <- drop.levels(temp$Location)
+  
+  if(nlevels(temp$Location) != 2){
+    Index <- append(Index, i)
+  }
+}
+data <- data %>% filter(!(data$GameNum %in% Index))
+
+
+#Filtering out players who have 5 or more rows
+Index3 <- numeric()
+
+for(i in unique(data$GameNum)){
+  
+  temp <- data %>% filter(GameNum == i)
+  
+  if(nrow(temp) >= 5){
+    Index3 <- append(Index3, i)
+  }
+}
+data <- data %>% filter(!(data$GameNum %in% Index3))
+
+
+#Filtering out players if their two turrets only shot at one type of virus
+Index4 <- numeric()
+
+for(i in unique(data$GameNum)){
+  
+  temp <- data %>% filter(GameNum == i)
+  temp$Virus <- drop.levels(temp$Virus)
+  
+  if(nlevels(temp$Virus) != 2){
+    Index4 <- append(Index4, i)
+  }
+}
+data <- data %>% filter(!(data$GameNum %in% Index4))
+```
+
+
+```{r Restructured Data (First half)}
+#Making Restrucured Data frame
+
+#Setting up
+LocationCombination <- character()
+MedicineCombination <- character()
+UpgradeCombination <- character()
+Health <- numeric()
+Funds <- numeric()
+
+#Filling up vectors for the above 4 columns
+for(i in unique(data$GameNum)){
+  
+  temp <- data %>% filter(GameNum == i)
+  
+  Funds <- append(Funds, temp$Funds[1])
+  Health <- append(Health, temp$Health[1])
+  
+  #Location Combination
+  loc <- sort(unique(temp$Location))
+  LocationCombination <- append(LocationCombination, paste(loc[1], loc[2], sep = ""))
+  
+  #Medicine Combination
+  temp1 <- temp %>% filter(Location == loc[1])
+  temp2 <- temp %>% filter(Location == loc[2])
+  
+  med1st <- temp1$Medicine[1]
+  med2nd <- temp2$Medicine[1]
+  
+  med1st <- str_sub(med1st, start = 5)
+  med2nd <- str_sub(med2nd, start = 5)
+  
+  MedicineCombination <- append(MedicineCombination, paste(med1st, med2nd, sep = ""))
+  
+  #Upgrade Combination
+  up1st <- temp1$Upgrade[1]
+  up2nd <- temp2$Upgrade[1]
+  
+  UpgradeCombination <- append(UpgradeCombination, paste(up1st, up2nd, sep = ""))
+
+}
+
+```
+
+
+
+```{r Restructured Data (Second Half)}
+#Fitering by player Virus choice
+data <- data %>% filter(Virus %in% virus)
+
+#Arrange data again
+data <- data %>% arrange(GameNum)
+
+#Setting Up
+Destroyed <- numeric()
+Shot <- numeric()
+
+#Filling up vectors 
+for(i in unique(data$GameNum)){
+  
+  temp <- data %>% filter(GameNum == i)
+  
+  Destroyed <- append(Destroyed, sum(temp$Destroyed))
+  Shot <- append(Shot, sum(temp$Shot))
+}
+
+
+#Restrucured Data 
+data_restructured <- data.frame(GameNum = sort(unique(data$GameNum)),
+                                LocationCombination = LocationCombination,
+                                MedicineCombination = MedicineCombination,
+                                UpgradeCombination = UpgradeCombination,
+                                Health = Health, Funds = Funds,
+                                Shot = Shot, Destroyed = Destroyed)
+
+#Adding Missed and Percent Destroyed Column
+data_restructured <- data_restructured %>% mutate(Missed = Shot - Destroyed,
+                                                  PercentDestroyed = (Destroyed/Shot)*100)
+
+```
+
+
+
+
+```{r Interaction Plot}
+
+#Destroyed
+data_destroyed <- data_restructured %>% group_by(LocationCombination, MedicineCombination, UpgradeCombination) %>% summarize(Mean = mean(Destroyed))
+
+ggplot(data = data_destroyed, aes(x = LocationCombination, y = Mean, color = MedicineCombination, group = MedicineCombination)) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(. ~ UpgradeCombination) +
+  labs(title = "Interaction Plot",
+       x = "Location Combination", y = "Destroyed") +
+  guides(col=guide_legend("Medicine Combination")) +
+  scale_color_manual(values = c("blue1", "purple1", "violetred", "red1")) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+       
+
+#Shot
+data_shot <- data_restructured %>% group_by(LocationCombination, MedicineCombination, UpgradeCombination) %>% summarize(Mean = mean(Shot))
+
+ggplot(data = data_shot, aes(x = LocationCombination, y = Mean, color = MedicineCombination, group = MedicineCombination)) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(. ~ UpgradeCombination) +
+  labs(title = "Interaction Plot",
+       x = "Location Combination", y = "Shot") +
+  guides(col=guide_legend("Medicine Combination")) +
+  scale_color_manual(values = c("blue1", "purple1", "violetred", "red1")) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+#Percent Destroyed
+data_percentdestroyed <- data_restructured %>% group_by(LocationCombination, MedicineCombination, UpgradeCombination) %>% summarize(Mean = mean(PercentDestroyed))
+
+ggplot(data = data_percentdestroyed, aes(x = LocationCombination, y = Mean, color = MedicineCombination, group = MedicineCombination)) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(. ~ UpgradeCombination) +
+  labs(title = "Interaction Plot",
+       x = "Location Combination", y = "Percent Destroyed") +
+  guides(col=guide_legend("Medicine Combination")) +
+  scale_color_manual(values = c("blue1", "purple1", "violetred", "red1")) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+       
+  
+
+
+```
+
+
+
+```{r Main Effects Plots (Location)}
+
+#Location - Destroyed
+main_ld <- data_restructured %>% group_by(LocationCombination, UpgradeCombination) %>% summarize(Mean = mean(Destroyed))
+
+ggplot(data = main_ld, aes(x = LocationCombination, y = Mean, group = 1)) +
+  geom_point() +
+  geom_path() +
+  labs(title = "Main Effects Plot: Location Combination",
+       x = "Location Combination", y = "Destroyed") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  panel.background = element_blank(), axis.line = element_line(colour = "black"),
+  plot.title = element_text(hjust = 0.5, face = "bold")) +
+  facet_wrap(. ~ UpgradeCombination)
+
+
+
+#Location - Shot
+main_ls <- data_restructured %>% group_by(LocationCombination, UpgradeCombination) %>% summarize(Mean = mean(Shot))
+
+ggplot(data = main_ls, aes(x = LocationCombination, y = Mean, group = 1)) +
+  geom_point() +
+  geom_path() +
+  labs(title = "Main Effects Plot: Location Combination",
+       x = "Location Combination", y = "Shot") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  panel.background = element_blank(), axis.line = element_line(colour = "black"),
+  plot.title = element_text(hjust = 0.5, face = "bold")) +
+  facet_wrap(. ~ UpgradeCombination)
+
+
+#Location - Percent Destroyed
+main_lpd <- data_restructured %>% group_by(LocationCombination, UpgradeCombination) %>% summarize(Mean = mean(PercentDestroyed))
+
+ggplot(data = main_lpd, aes(x = LocationCombination, y = Mean, group = 1)) +
+  geom_point() +
+  geom_path() +
+  labs(title = "Main Effects Plot: Location Combination",
+       x = "Location Combination", y = "Percent Destroyed") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  panel.background = element_blank(), axis.line = element_line(colour = "black"),
+  plot.title = element_text(hjust = 0.5, face = "bold")) +
+  facet_wrap(. ~ UpgradeCombination)
+
+
+```
+
+
+
+
+```{r Main Effects Plots (Medicine)}
+
+#Medicine - Destroyed
+main_md <- data_restructured %>% group_by(MedicineCombination, UpgradeCombination) %>% summarize(Mean = mean(Destroyed))
+
+ggplot(data = main_md, aes(x = MedicineCombination, y = Mean, group = 1)) +
+  geom_point() +
+  geom_path() +
+  labs(title = "Main Effects Plot: Medicine Combination",
+       x = "Medicine Combination", y = "Destroyed") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  panel.background = element_blank(), axis.line = element_line(colour = "black"),
+  plot.title = element_text(hjust = 0.5, face = "bold")) +
+  facet_wrap(. ~ UpgradeCombination)
+
+
+#Medicine - Shot
+main_ms <- data_restructured %>% group_by(MedicineCombination, UpgradeCombination) %>% summarize(Mean = mean(Shot))
+
+ggplot(data = main_ms, aes(x = MedicineCombination, y = Mean, group = 1)) +
+  geom_point() +
+  geom_path() +
+  labs(title = "Main Effects Plot: Medicine Combination",
+       x = "Medicine Combination", y = "Shot") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  panel.background = element_blank(), axis.line = element_line(colour = "black"),
+  plot.title = element_text(hjust = 0.5, face = "bold")) +
+  facet_wrap(. ~ UpgradeCombination)
+
+
+#Medicine - Percent Destroyed
+main_mpd <- data_restructured %>% group_by(MedicineCombination, UpgradeCombination) %>% summarize(Mean = mean(PercentDestroyed))
+
+ggplot(data = main_mpd, aes(x = MedicineCombination, y = Mean, group = 1)) +
+  geom_point() +
+  geom_path() +
+  labs(title = "Main Effects Plot: Medicine Combination",
+       x = "Medicine Combination", y = "Percent Destroyed") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  panel.background = element_blank(), axis.line = element_line(colour = "black"),
+  plot.title = element_text(hjust = 0.5, face = "bold")) +
+  facet_wrap(. ~ UpgradeCombination)
+
+```
+
+
+
+```{r Table}
+table(data_restructured$LocationCombination, data_restructured$MedicineCombination)
+```
+
+
+
+
+
+
+
+
+
+
+
