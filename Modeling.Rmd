@@ -1,0 +1,317 @@
+---
+title: "Modeling"
+author: "Riu Sakaguchi"
+date: "6/8/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#Loading libraries
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(gdata)
+library(stats)
+library(stringr)
+library(rpart)
+library(bestglm)
+
+```
+
+
+
+```{r}
+#Importning data
+data <- readr::read_csv("https://www.stat2games.sites.grinnell.edu/data/defenders/getdata.php")
+            
+#Levels
+data <- data %>% filter(Level > 0)
+
+#Keeping Data after August 2nd
+data <- data %>% mutate(Date = str_sub(Date, 1, 10))
+data$Date <- as.Date(data$Date, format = "%Y-%m-%d")
+data <- data %>% filter(Date >= as.Date("08/02/2019", format = "%m/%d/%Y"))
+
+            
+```
+
+
+
+```{r}
+
+#Level 1 Only
+#Y Variable: Shot
+data1 <- data %>% filter(Level == 1)
+
+anova1 <- aov(Shot ~ Location + Upgrade + Location*Upgrade , data = data1)
+summary(anova1)
+
+```
+
+
+```{r}
+
+#Level 1 Only
+#Y Variable: Destroyed
+
+data2 <- data %>% filter(Level == 1)
+
+anova2 <- aov(Destroyed ~ Location + Upgrade + Medicine + Virus +
+                Location*Upgrade + Location*Medicine + Location*Virus +
+                Upgrade*Medicine + Upgrade*Virus +
+                Medicine*Virus, data = data2)
+summary(anova2)
+```
+
+
+```{r}
+#Looking at Good vs Bad Players and the kind of upgrades they made and locations where they placed turrets
+
+data3h <- data %>% filter(Level == 3, Wave == 6, Health == 3)
+databad <- data %>% filter(Level == 3, Wave == 6, Health == 1)
+
+
+round(table(data3h$Upgrade)/nrow(data3h),3)
+round(table(databad$Upgrade)/nrow(databad),3)
+
+table(data3h$Location)/nrow(data3h)
+table(databad$Location)/nrow(databad)
+
+summary(data3h$Funds)
+summary(databad$Funds)
+```
+
+
+
+
+```{r}
+#MANOVA
+
+data3 <- data %>% filter(Level == 3, Wave == 6)
+man <- manova(cbind(Health, Funds, Destroyed) ~ Location + Upgrade + Medicine + Virus +
+                Location*Upgrade + Location*Medicine + Location*Virus +
+                Upgrade*Medicine + Upgrade*Virus +
+                Medicine*Virus, data = data3)
+
+summary(man)
+
+```
+
+
+```{r}
+#CART Analysis
+
+data4 <- data %>% filter(Level == 2, Wave == 5)
+data4$Location <- as.factor(data4$Location)
+data4$Upgrade <- as.factor(data4$Upgrade)
+#data4$TurretType <- as.factor(data4$TurretType)
+
+#Score Column
+data4 <- data4 %>% mutate(Score = 100*Health + Funds + 10*Destroyed)
+
+
+
+model <- rpart(Score~ Location + Upgrade,  data = data4, control= rpart.control(minbucket=1, cp=0.001))
+par(xpd = NA) # otherwise on some devices the text is clipped
+plot(model)
+text(model, pretty = 1, use.n = T)
+
+
+
+```
+
+
+
+```{r}
+#ANOVA with data4 from above
+
+anova_result <- aov(Score ~ Location + Upgrade + Medicine + Virus + 
+                Location*Upgrade + Location*Medicine + Location*Virus  +
+                Upgrade*Medicine + Upgrade*Virus + 
+                Medicine*Virus, data = data4)
+
+summary(anova_result)
+
+
+#Looking into means per location and upgrade
+means <- data4 %>% group_by(Location, Upgrade) %>%
+  summarize(Mean = mean(Score))
+
+
+
+
+```
+
+
+
+
+```{r}
+#Looking into best vs worst players for Level 2 Wave 5
+
+summary(data4$Score)
+
+#1st Quartile and 3rd Quartile
+data3rd <- data4 %>% filter(Score >= 760)
+data1st <- data4 %>% filter(Score <= 520)
+
+#Location
+table(data3rd$Location)
+table(data1st$Location)
+
+#TurretType
+table(data3rd$TurretType)
+table(data1st$TurretType)
+
+#Upgrade
+table(data3rd$Upgrade)
+table(data1st$Upgrade)
+
+#Medicine
+table(data3rd$Medicine)
+table(data1st$Medicine)
+
+
+```
+
+
+```{r}
+#Comparing Health = 0 to Health = 3
+#For Level 3 Waves 3,4,5
+
+data5 <- data %>% filter(Level == 3, Wave %in% c(3,4,5))
+data5 <- data5 %>% mutate(Score = 100*Health + Funds + 10*Destroyed)
+
+data5good <- data5 %>% filter(Health == 3)
+data5bad <- data5 %>% filter(Health == 0)
+
+#Location
+round(table(data5good$Location)/nrow(data5good),3)
+round(table(data5bad$Location)/nrow(data5bad),3)
+
+#Upgrade
+round(table(data5good$Upgrade)/nrow(data5good),3)
+round(table(data5bad$Upgrade)/nrow(data5bad),3)
+
+#TurretType
+round(table(data5good$TurretType)/nrow(data5good),3)
+round(table(data5bad$TurretType)/nrow(data5bad),3)
+
+```
+
+
+
+
+
+
+```{r}
+#Logistic Regression
+
+#Level 4
+datal <- data %>% filter(Level == 4)
+
+#Making an outcome column
+datal$Outcome <- 1
+for(i in 1:nrow(datal)){
+  
+  if(datal$Health[i] == 0){
+    
+    datal$Outcome[i] <- 0
+  }
+}
+
+
+logi <- glm(Outcome ~ Location + TurretType + Upgrade  + Medicine, data = datal)
+summary(logi)
+
+
+```
+
+
+```{r}
+#Strategy
+
+#Investigating Outcome = 1 vs Outcome = 0
+
+#Level/Wave
+dataOutcome <- data %>% filter(Level == 5, Wave == 10)
+
+#Percent Destroyed
+dataOutcome <- dataOutcome %>% mutate(PercDestroyed = Destroyed/Shot)
+
+#Outcome column
+dataOutcome$Outcome <- 1
+
+for(i in 1:nrow(dataOutcome)){
+  
+  if(dataOutcome$Health[i] == 0){
+    
+    dataOutcome$Outcome[i] <- 0
+  }
+}
+
+dataOutcome0 <- dataOutcome %>% filter(Outcome == 0)
+dataOutcome1 <- dataOutcome %>% filter(Outcome == 1)
+
+
+#Summarized Table
+tb0 <- dataOutcome0 %>% group_by(GameNum) %>%
+  summarize(P = sum(Destroyed)/sum(Shot), TShot = sum(Shot))
+
+tb1 <- dataOutcome1 %>% group_by(GameNum) %>%
+  summarize(P = sum(Destroyed)/sum(Shot), TShot = sum(Shot))
+  
+
+#Filtering Row 3 and 7
+#tb1 <- tb1[-c(3,7),]
+
+
+#Means
+mean(tb0$P)
+mean(tb1$P)
+
+mean(tb0$TShot)
+mean(tb1$TShot)
+
+
+#Table
+#Virus = 35 Blue 35 Red
+
+#Average number of turrets
+nrow(dataOutcome0)/nrow(tb0)
+nrow(dataOutcome1)/nrow(tb1)
+
+#Average number of Upgrades
+nrow(dataOutcome0 %>% filter(!(Upgrade == 0)))/nrow(tb0)
+nrow(dataOutcome1 %>% filter(!(Upgrade == 0)))/nrow(tb1)
+
+
+
+#Outcome = 0
+round(table(dataOutcome0$Location)/nrow(dataOutcome0), 3)
+round(table(dataOutcome0$Upgrade)/nrow(dataOutcome0), 3)
+round(table(dataOutcome0$Medicine)/nrow(dataOutcome0), 3)
+round(table(dataOutcome0$TurretType)/nrow(dataOutcome0), 3)
+
+
+
+#Outcome = 1
+round(table(dataOutcome1$Location)/nrow(dataOutcome1), 3)
+round(table(dataOutcome1$Upgrade)/nrow(dataOutcome1), 3)
+round(table(dataOutcome1$Medicine)/nrow(dataOutcome1), 3)
+round(table(dataOutcome1$TurretType)/nrow(dataOutcome1), 3)
+
+```
+
+
+
+
+
+
+
+
+
