@@ -1,0 +1,624 @@
+---
+title: "Analysis"
+author: "Riu Sakaguchi"
+date: "6/9/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#Libraries
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(gdata)
+library(stats)
+library(stringr)
+
+#Data
+data <- readr::read_csv("https://www.stat2games.sites.grinnell.edu/data/defenders/getdata.php")
+
+#Keeping Data after August 2nd
+data <- data %>% mutate(Date = str_sub(Date, 1, 10))
+data$Date <- as.Date(data$Date, format = "%Y-%m-%d")
+data <- data %>% filter(Date >= as.Date("08/02/2019", format = "%m/%d/%Y"))
+
+#Keeping Level 1 Only
+data <- data %>% filter(Level == 1)
+
+```
+
+
+
+```{r}
+
+#Wave 1 and Full Health
+data1 <- data %>% filter(Wave == 1, Health == 3)
+data1 <- data1 %>% arrange(GameNum)
+
+#M1
+M1 <- character()
+for(i in unique(data1$GameNum)){
+  
+ temp <- data1 %>% filter(GameNum == i)
+ 
+ if(!(1 %in% temp$Location)){
+   
+   M1 <- append(M1, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 1)
+   M1 <- append(M1, temp2$Medicine[1])
+  
+  }
+}
+  
+#M2
+M2 <- character()
+for(i in unique(data1$GameNum)){
+  
+ temp <- data1 %>% filter(GameNum == i)
+ 
+ if(!(2 %in% temp$Location)){
+   
+   M2 <- append(M2, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 2)
+   M2 <- append(M2, temp2$Medicine[1])
+  
+  }
+}
+
+#M3
+M3 <- character()
+for(i in unique(data1$GameNum)){
+  
+ temp <- data1 %>% filter(GameNum == i)
+ 
+ if(!(3 %in% temp$Location)){
+   
+   M3 <- append(M3, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 3)
+   M3 <- append(M3, temp2$Medicine[1])
+  
+  }
+}
+
+
+#M4
+M4 <- character()
+for(i in unique(data1$GameNum)){
+  
+ temp <- data1 %>% filter(GameNum == i)
+ 
+ if(!(4 %in% temp$Location)){
+   
+   M4 <- append(M4, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 4)
+   M4 <- append(M4, temp2$Medicine[1])
+  
+  }
+}
+
+
+#U1
+U1 <- character()
+for(i in unique(data1$GameNum)){
+  
+ temp <- data1 %>% filter(GameNum == i)
+ 
+ if(!(1 %in% temp$Location)){
+   
+   U1 <- append(U1, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 1)
+   U1 <- append(U1, temp2$Upgrade[1])
+  
+  }
+}
+
+
+
+#U2
+U2 <- character()
+for(i in unique(data1$GameNum)){
+  
+ temp <- data1 %>% filter(GameNum == i)
+ 
+ if(!(2 %in% temp$Location)){
+   
+   U2 <- append(U2, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 2)
+   U2 <- append(U2, temp2$Upgrade[1])
+  
+  }
+}
+
+
+#U3
+U3 <- character()
+for(i in unique(data1$GameNum)){
+  
+ temp <- data1 %>% filter(GameNum == i)
+ 
+ if(!(3 %in% temp$Location)){
+   
+   U3 <- append(U3, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 3)
+   U3 <- append(U3, temp2$Upgrade[1])
+  
+  }
+}
+
+#U4
+U4 <- character()
+for(i in unique(data1$GameNum)){
+  
+ temp <- data1 %>% filter(GameNum == i)
+ 
+ if(!(4 %in% temp$Location)){
+   
+   U4 <- append(U4, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 4)
+   U4 <- append(U4, temp2$Upgrade[1])
+  
+  }
+}
+
+#Funds
+Funds1 <- numeric()
+for(i in unique(data1$GameNum)){
+  
+   temp <- data1 %>% filter(GameNum == i)
+   
+   Funds1 <- append(Funds1, temp$Funds[1])
+  
+}
+
+
+
+
+#New Data
+data1N <- data.frame(GameNum = sort(unique(data1$GameNum)), M1 = M1, M2 = M2,
+                     M3 = M3, M4 = M4, 
+                     U1 = U1, U2 = U2,
+                     U3 = U3, U4 = U4,
+                     Funds = Funds1)
+
+
+```
+
+
+```{r}
+#ANOVA for Level 1 Wave 1
+anova_result1 <- aov(Funds ~ M1 + M2 + M3 + M4 + U1 + U2 + U3 + U4 +
+                       M1*U1 + M2*U2 + M3*U3 + M4*U4, data = data1N)
+
+anova_result11 <- aov(Funds ~ (M1 + M2 + M3 + M4 + U1 + U2 + U3 + U4)^2, data = data1N)
+
+summary(anova_result11)
+
+
+
+
+```
+
+```{r}
+#Wave 2 and Full Health
+data2 <- data %>% filter(Wave == 2, Health == 3)
+data2 <- data2 %>% arrange(GameNum)
+
+#M1
+M1 <- character()
+for(i in unique(data2$GameNum)){
+  
+ temp <- data2 %>% filter(GameNum == i)
+ 
+ if(!(1 %in% temp$Location)){
+   
+   M1 <- append(M1, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 1)
+   M1 <- append(M1, temp2$Medicine[1])
+  
+  }
+}
+  
+#M2
+M2 <- character()
+for(i in unique(data2$GameNum)){
+  
+ temp <- data2 %>% filter(GameNum == i)
+ 
+ if(!(2 %in% temp$Location)){
+   
+   M2 <- append(M2, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 2)
+   M2 <- append(M2, temp2$Medicine[1])
+  
+  }
+}
+
+#M3
+M3 <- character()
+for(i in unique(data2$GameNum)){
+  
+ temp <- data2 %>% filter(GameNum == i)
+ 
+ if(!(3 %in% temp$Location)){
+   
+   M3 <- append(M3, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 3)
+   M3 <- append(M3, temp2$Medicine[1])
+  
+  }
+}
+
+
+#M4
+M4 <- character()
+for(i in unique(data2$GameNum)){
+  
+ temp <- data2 %>% filter(GameNum == i)
+ 
+ if(!(4 %in% temp$Location)){
+   
+   M4 <- append(M4, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 4)
+   M4 <- append(M4, temp2$Medicine[1])
+  
+  }
+}
+
+
+#U1
+U1 <- character()
+for(i in unique(data2$GameNum)){
+  
+ temp <- data2 %>% filter(GameNum == i)
+ 
+ if(!(1 %in% temp$Location)){
+   
+   U1 <- append(U1, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 1)
+   U1 <- append(U1, temp2$Upgrade[1])
+  
+  }
+}
+
+
+
+#U2
+U2 <- character()
+for(i in unique(data2$GameNum)){
+  
+ temp <- data2 %>% filter(GameNum == i)
+ 
+ if(!(2 %in% temp$Location)){
+   
+   U2 <- append(U2, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 2)
+   U2 <- append(U2, temp2$Upgrade[1])
+  
+  }
+}
+
+
+#U3
+U3 <- character()
+for(i in unique(data2$GameNum)){
+  
+ temp <- data2 %>% filter(GameNum == i)
+ 
+ if(!(3 %in% temp$Location)){
+   
+   U3 <- append(U3, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 3)
+   U3 <- append(U3, temp2$Upgrade[1])
+  
+  }
+}
+
+#U4
+U4 <- character()
+for(i in unique(data2$GameNum)){
+  
+ temp <- data2 %>% filter(GameNum == i)
+ 
+ if(!(4 %in% temp$Location)){
+   
+   U4 <- append(U4, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 4)
+   U4 <- append(U4, temp2$Upgrade[1])
+  
+  }
+}
+
+#Funds2
+Funds2 <- numeric()
+for(i in unique(data2$GameNum)){
+  
+   temp <- data2 %>% filter(GameNum == i)
+   
+   Funds2 <- append(Funds2, temp$Funds[1])
+  
+}
+
+Funds21 <- numeric()
+for(i in unique(data2$GameNum)){
+  
+  temp <- data1 %>% filter(GameNum == i)
+  
+  Funds21 <- append(Funds21, temp$Funds[1])
+  
+}
+
+Funds2 <- Funds2 - Funds21
+
+#New Data 2
+data2N <- data.frame(GameNum = sort(unique(data2$GameNum)), M1 = M1, M2 = M2,
+                     M3 = M3, M4 = M4, 
+                     U1 = U1, U2 = U2,
+                     U3 = U3, U4 = U4,
+                     Funds = Funds2)
+
+```
+
+
+```{r}
+#ANOVA for Level 1 Wave 2
+anova_result2 <- aov(Funds ~ M1 + M2 + M3 + M4 + U1 + U2 + U3 + U4 +
+                       M1*U1 + M2*U2 + M3*U3 + M4*U4, data = data2N)
+summary(anova_result2)
+
+```
+
+
+
+```{r}
+#Wave 3 and Full Health
+data3 <- data %>% filter(Wave == 3, Health == 3)
+data3 <- data3 %>% arrange(GameNum)
+
+#M1
+M1 <- character()
+for(i in unique(data3$GameNum)){
+  
+ temp <- data3 %>% filter(GameNum == i)
+ 
+ if(!(1 %in% temp$Location)){
+   
+   M1 <- append(M1, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 1)
+   M1 <- append(M1, temp2$Medicine[1])
+  
+  }
+}
+  
+#M2
+M2 <- character()
+for(i in unique(data3$GameNum)){
+  
+ temp <- data3 %>% filter(GameNum == i)
+ 
+ if(!(2 %in% temp$Location)){
+   
+   M2 <- append(M2, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 2)
+   M2 <- append(M2, temp2$Medicine[1])
+  
+  }
+}
+
+#M3
+M3 <- character()
+for(i in unique(data3$GameNum)){
+  
+ temp <- data3 %>% filter(GameNum == i)
+ 
+ if(!(3 %in% temp$Location)){
+   
+   M3 <- append(M3, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 3)
+   M3 <- append(M3, temp2$Medicine[1])
+  
+  }
+}
+
+
+#M4
+M4 <- character()
+for(i in unique(data3$GameNum)){
+  
+ temp <- data3 %>% filter(GameNum == i)
+ 
+ if(!(4 %in% temp$Location)){
+   
+   M4 <- append(M4, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 4)
+   M4 <- append(M4, temp2$Medicine[1])
+  
+  }
+}
+
+
+#U1
+U1 <- character()
+for(i in unique(data3$GameNum)){
+  
+ temp <- data3 %>% filter(GameNum == i)
+ 
+ if(!(1 %in% temp$Location)){
+   
+   U1 <- append(U1, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 1)
+   U1 <- append(U1, temp2$Upgrade[1])
+  
+  }
+}
+
+
+
+#U2
+U2 <- character()
+for(i in unique(data3$GameNum)){
+  
+ temp <- data3 %>% filter(GameNum == i)
+ 
+ if(!(2 %in% temp$Location)){
+   
+   U2 <- append(U2, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 2)
+   U2 <- append(U2, temp2$Upgrade[1])
+  
+  }
+}
+
+
+#U3
+U3 <- character()
+for(i in unique(data3$GameNum)){
+  
+ temp <- data3 %>% filter(GameNum == i)
+ 
+ if(!(3 %in% temp$Location)){
+   
+   U3 <- append(U3, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 3)
+   U3 <- append(U3, temp2$Upgrade[1])
+  
+  }
+}
+
+#U4
+U4 <- character()
+for(i in unique(data3$GameNum)){
+  
+ temp <- data3 %>% filter(GameNum == i)
+ 
+ if(!(4 %in% temp$Location)){
+   
+   U4 <- append(U4, "None")
+
+ } else{
+    
+   temp2 <- temp %>% filter(Location == 4)
+   U4 <- append(U4, temp2$Upgrade[1])
+  
+  }
+}
+
+#Funds3
+Funds3 <- numeric()
+for(i in unique(data3$GameNum)){
+  
+   temp <- data3 %>% filter(GameNum == i)
+   
+   Funds3 <- append(Funds3, temp$Funds[1])
+  
+}
+
+
+Funds32 <- numeric()
+for(i in unique(data3$GameNum)){
+  
+  temp <- data2 %>% filter(GameNum == i)
+  
+  Funds32 <- append(Funds32, temp$Funds[1])
+  
+}
+
+Funds3 <- Funds3 - Funds32
+
+#New Data 3
+data3N <- data.frame(GameNum = sort(unique(data3$GameNum)), M1 = M1, M2 = M2,
+                     M3 = M3, M4 = M4, 
+                     U1 = U1, U2 = U2,
+                     U3 = U3, U4 = U4,
+                     Funds = Funds3)
+
+```
+
+
+```{r}
+#ANOVA for Level 1 Wave 3
+anova_result3 <- aov(Funds ~ M1 + M2 + M3 + M4 + U1 + U2 + U3 + U4 +
+                       M1*U1 + M2*U2 + M3*U3 + M4*U4, data = data3N)
+summary(anova_result3)
+
+
+
+```
+
+
+
+
+
