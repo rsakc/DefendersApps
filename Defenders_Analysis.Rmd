@@ -1,0 +1,422 @@
+---
+title: "Defenders Analysis"
+author: "Riu Sakaguchi"
+date: "6/12/2020"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+```
+
+
+```{r Libraries}
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(gdata)
+library(stats)
+library(stringr)
+```
+
+
+```{r Loading Data}
+#Data
+data <- readr::read_csv("https://www.stat2games.sites.grinnell.edu/data/defenders/getdata.php")
+
+#Keeping Data after August 2nd
+data <- data %>% mutate(Date = str_sub(Date, 1, 10))
+data$Date <- as.Date(data$Date, format = "%Y-%m-%d")
+data <- data %>% filter(Date >= as.Date("08/02/2019", format = "%m/%d/%Y"))
+
+#Making Location and Virus a factor
+data$Location <- as.factor(data$Location)
+data$Virus <- as.factor(data$Virus)
+
+#Arranging data
+data <- data %>% arrange(GameNum)
+```
+
+
+```{r User Selection}
+#Choose Level/Wave/Virus
+level <- 4
+wave <- 8
+
+#For all data, include both red and blue
+virus <- c("blue")
+```
+
+
+
+```{r Restricting Data}
+#Filering level and wave
+data <- data %>% filter(Level == level, Wave == wave)
+
+#Removing Gamenum -1
+data <- data %>% filter(!(GameNum == -1))
+
+
+#Removing if there werent exactly 2 locations
+Index <- numeric()
+
+for(i in unique(data$GameNum)){
+  
+  temp <- data %>% filter(GameNum == i)
+  temp$Location <- drop.levels(temp$Location)
+  
+  if(nlevels(temp$Location) != 2){
+    Index <- append(Index, i)
+  }
+}
+data <- data %>% filter(!(data$GameNum %in% Index))
+
+
+#Filtering out players who used any upgrades
+Index2 <- numeric()
+
+for(i in unique(data$GameNum)){
+  
+  temp <- data %>% filter(GameNum == i)
+  
+  if("1Fast" %in% temp$Upgrade | 
+     "1Far" %in% temp$Upgrade){
+    
+    Index2 <- append(Index2, i)
+  }
+}
+data <- data %>% filter(!(data$GameNum %in% Index2))
+
+
+#Filtering out players who have 5 or more rows
+Index3 <- numeric()
+
+for(i in unique(data$GameNum)){
+  
+  temp <- data %>% filter(GameNum == i)
+  
+  if(nrow(temp) >= 5){
+    Index3 <- append(Index3, i)
+  }
+}
+data <- data %>% filter(!(data$GameNum %in% Index3))
+
+
+#Filtering out players if their two turrets only shot at one type of virus
+Index4 <- numeric()
+
+for(i in unique(data$GameNum)){
+  
+  temp <- data %>% filter(GameNum == i)
+  temp$Virus <- drop.levels(temp$Virus)
+  
+  if(nlevels(temp$Virus) != 2){
+    Index4 <- append(Index4, i)
+  }
+}
+data <- data %>% filter(!(data$GameNum %in% Index4))
+
+```
+
+
+```{r Restructured Data (First half)}
+#Making Restrucured Data frame
+
+#Setting up
+LocationCombination <- character()
+MedicineCombination <- character()
+Health <- numeric()
+Funds <- numeric()
+
+#Filling up vectors for the above 4 columns
+for(i in unique(data$GameNum)){
+  
+  temp <- data %>% filter(GameNum == i)
+  
+  Funds <- append(Funds, temp$Funds[1])
+  Health <- append(Health, temp$Health[1])
+  
+  #Location Combination
+  loc <- sort(unique(temp$Location))
+  LocationCombination <- append(LocationCombination, paste(loc[1], loc[2], sep = ""))
+  
+  #Medicine Combination
+  temp1 <- temp %>% filter(Location == loc[1])
+  temp2 <- temp %>% filter(Location == loc[2])
+  
+  med1st <- temp1$Medicine[1]
+  med2nd <- temp2$Medicine[1]
+  
+  med1st <- str_sub(med1st, start = 5)
+  med2nd <- str_sub(med2nd, start = 5)
+  
+  MedicineCombination <- append(MedicineCombination, paste(med1st, med2nd, sep = ""))
+}
+
+```
+
+
+```{r Restructured Data (Second Half)}
+#Fitering by player Virus choice
+data <- data %>% filter(Virus %in% virus)
+
+#Arrange data again
+data <- data %>% arrange(GameNum)
+
+#Setting Up
+Destroyed <- numeric()
+Shot <- numeric()
+
+#Filling up vectors 
+for(i in unique(data$GameNum)){
+  
+  temp <- data %>% filter(GameNum == i)
+  
+  Destroyed <- append(Destroyed, sum(temp$Destroyed))
+  Shot <- append(Shot, sum(temp$Shot))
+}
+
+
+#Restrucured Data 
+data_restructured <- data.frame(GameNum = sort(unique(data$GameNum)),
+                                LocationCombination = LocationCombination,
+                                MedicineCombination = MedicineCombination,
+                                Health = Health, Funds = Funds,
+                                Shot = Shot, Destroyed = Destroyed)
+
+#Adding Missed and Percent Destroyed Column
+data_restructured <- data_restructured %>% mutate(Missed = Shot - Destroyed,
+                                                  PercentDestroyed = (Destroyed/Shot)*100)
+
+```
+
+
+
+```{r Interaction Plots}
+
+#Destroyed
+plot_destroyed <- interaction.plot(data_restructured$LocationCombination, data_restructured$MedicineCombination, data_restructured$Destroyed,
+                 main = "Interaction Plot",
+                 xlab = "Location Combination",
+                 ylab = "Destroyed",
+                 trace.label = "Med Combo",
+                 col = c("blue1", "purple1", "violetred", "red1"),
+                 lwd = 1.5) 
+
+
+#Shot
+plot_shot <- interaction.plot(data_restructured$LocationCombination, data_restructured$MedicineCombination, data_restructured$Shot,
+                 main = "Interaction Plot",
+                 xlab = "Location Combination",
+                 ylab = "Shot",
+                 trace.label = "Med Combo",
+                 col = c("blue1", "purple1", "violetred", "red1"),
+                 lwd = 1.5) 
+
+
+#Percent Destroyed
+plot_percentdestroyed <- interaction.plot(data_restructured$LocationCombination, data_restructured$MedicineCombination, data_restructured$PercentDestroyed,
+                 main = "Interaction Plot",
+                 xlab = "Location Combination",
+                 ylab = "Percent Destroyed",
+                 trace.label = "Med Combo",
+                 col = c("blue1", "purple1", "violetred", "red1"),
+                 lwd = 1.5) 
+```
+
+
+
+**Destroyed**
+BR (12, 13, 14)
+RR (24, 34) Turrets are too close to each other and since they are effective, many of the shots are not getting in and hence destroyed goes down as well.
+
+**Shot**
+RR (24, 34) As explained above, turrets are too close to each other and since they are effective, the turret that shoots second won't get their shot in. 
+
+**Percent Destroyed**
+RB and BR cross between 12 and 13.
+BB and RR cross at 34 (Sample size could be an issue).
+
+\
+ 
+
+```{r Main Effects Plots (Location)}
+
+#Location - Destroyed
+main_ld <- data_restructured %>% group_by(LocationCombination) %>% summarize(Mean = mean(Destroyed))
+
+ggplot(data = main_ld, aes(x = LocationCombination, y = Mean, group = 1)) +
+  geom_point() +
+  geom_path() +
+  labs(title = "Main Effects Plot: Location Combination",
+       x = "Location Combination", y = "Destroyed") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  panel.background = element_blank(), axis.line = element_line(colour = "black"),
+  plot.title = element_text(hjust = 0.5, face = "bold"))
+
+
+
+
+
+#Location - Shot
+main_ls <- data_restructured %>% group_by(LocationCombination) %>% summarize(Mean = mean(Shot))
+
+ggplot(data = main_ls, aes(x = LocationCombination, y = Mean, group = 1)) +
+  geom_point() +
+  geom_path() +
+  labs(title = "Main Effects Plot: Location Combination",
+       x = "Location Combination", y = "Shot") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  panel.background = element_blank(), axis.line = element_line(colour = "black"),
+  plot.title = element_text(hjust = 0.5, face = "bold"))
+
+
+#Location - Percent Destroyed
+main_lpd <- data_restructured %>% group_by(LocationCombination) %>% summarize(Mean = mean(PercentDestroyed))
+
+ggplot(data = main_lpd, aes(x = LocationCombination, y = Mean, group = 1)) +
+  geom_point() +
+  geom_path() +
+  labs(title = "Main Effects Plot: Location Combination",
+       x = "Location Combination", y = "Percent Destroyed") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  panel.background = element_blank(), axis.line = element_line(colour = "black"),
+  plot.title = element_text(hjust = 0.5, face = "bold"))
+
+
+```
+
+**Destroyed**
+Higher destroyed when turrets are closer to the entrance makes sense because we also get more shots in. 23 seems to be the worst location combination.
+
+**Shots**
+Again, we get more shots in when the turrets are placed closer to the entrance, and less as they are placed closer to the exit. 
+
+**Percent Destroyed**
+We see a U shape pattern with higher percentages at locations closest to the entrace and closest to the exit. Could most likley be due to the ratios of medicine combination at each location.
+
+\
+
+
+```{r Main Effects Plots (Medicine)}
+
+#Medicine - Destroyed
+main_md <- data_restructured %>% group_by(MedicineCombination) %>% summarize(Mean = mean(Destroyed))
+
+ggplot(data = main_md, aes(x = MedicineCombination, y = Mean, group = 1)) +
+  geom_point() +
+  geom_path() +
+  labs(title = "Main Effects Plot: Medicine Combination",
+       x = "Medicine Combination", y = "Destroyed") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  panel.background = element_blank(), axis.line = element_line(colour = "black"),
+  plot.title = element_text(hjust = 0.5, face = "bold"))
+
+
+#Medicine - Shot
+main_ms <- data_restructured %>% group_by(MedicineCombination) %>% summarize(Mean = mean(Shot))
+
+ggplot(data = main_ms, aes(x = MedicineCombination, y = Mean, group = 1)) +
+  geom_point() +
+  geom_path() +
+  labs(title = "Main Effects Plot: Medicine Combination",
+       x = "Medicine Combination", y = "Shot") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  panel.background = element_blank(), axis.line = element_line(colour = "black"),
+  plot.title = element_text(hjust = 0.5, face = "bold"))
+
+
+#Medicine - Percent Destroyed
+main_mpd <- data_restructured %>% group_by(MedicineCombination) %>% summarize(Mean = mean(PercentDestroyed))
+
+ggplot(data = main_mpd, aes(x = MedicineCombination, y = Mean, group = 1)) +
+  geom_point() +
+  geom_path() +
+  labs(title = "Main Effects Plot: Medicine Combination",
+       x = "Medicine Combination", y = "Percent Destroyed") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  panel.background = element_blank(), axis.line = element_line(colour = "black"),
+  plot.title = element_text(hjust = 0.5, face = "bold"))
+
+```
+
+
+**Destroyed**
+BB being the worst makes sense because there are more red viruses. The rest seem to be similar in terms of the number of viruses destroyed.
+
+**Shot**
+Perhaps RR is lower because it is supposed to be the most effective combination, and the second turrent might not be getting in shots. BB being the lowest might be a result of disproportionate location combinations
+
+**Percent Destroyed**
+This plot makes sense, BB being the lowest, RB and BR being around the same, and RR being the highest. 
+
+
+
+
+
+
+
+```{r}
+#Destroyed
+anova_testDB <- aov(Destroyed ~ (LocationCombination  + MedicineCombination)^2, 
+                  data = data_restructured)
+summary(anova_testDB)
+
+
+#Shot
+anova_testSB <- aov(Shot ~ (LocationCombination  + MedicineCombination)^2, 
+                  data = data_restructured)
+summary(anova_testSB)
+
+
+#Percent Destroyed
+anova_testPB <- aov(PercentDestroyed ~ (LocationCombination  + MedicineCombination)^2, 
+                  data = data_restructured)
+summary(anova_testPB)
+```
+
+
+```{r Table}
+table(data_restructured$LocationCombination,data_restructured$MedicineCombination)
+```
+
+
+```{r T-Tests}
+
+#Two Group Data
+data1213 <- data_restructured %>% filter(LocationCombination %in% c("12", "13"))
+data1314 <- data_restructured %>% filter(LocationCombination %in% c("13", "14"))
+data2434 <- data_restructured %>% filter(LocationCombination %in% c("24", "34"))
+
+
+#Destroyed
+t.test(data1213$Destroyed ~ data1213$LocationCombination)
+t.test(data1314$Destroyed ~ data1314$LocationCombination)
+
+#Shot
+t.test(data1213$Shot ~ data1213$LocationCombination)
+t.test(data1314$Shot ~ data1314$LocationCombination)
+
+#Percent Destroyed
+t.test(data1213$PercentDestroyed ~ data1213$LocationCombination)
+t.test(data1314$PercentDestroyed ~ data1314$LocationCombination)
+t.test(data2434$PercentDestroyed ~ data2434$LocationCombination)
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
