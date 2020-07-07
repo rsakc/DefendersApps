@@ -1,0 +1,421 @@
+---
+title: "Analysis2"
+author: "Riu Sakaguchi"
+date: "6/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+#Libraries
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(gdata)
+library(stats)
+library(stringr)
+
+
+#Data
+data <- readr::read_csv("https://www.stat2games.sites.grinnell.edu/data/defenders/getdata.php")
+
+#Keeping Data after August 2nd
+data <- data %>% mutate(Date = str_sub(Date, 1, 10))
+data$Date <- as.Date(data$Date, format = "%Y-%m-%d")
+data <- data %>% filter(Date >= as.Date("08/02/2019", format = "%m/%d/%Y"))
+
+#Keeping Level 1/Wave 1
+data <- data %>% filter(Level == 1, Wave == 1)
+
+```
+
+
+```{r}
+#Restricting Data
+
+#Arranging data
+data <- data %>% arrange(GameNum)
+
+#Removing GameNum (-1)
+data <- data %>% filter(!(GameNum == -1))
+
+#Making Location and Virus a factor
+data$Location <- as.factor(data$Location)
+data$Virus <- as.factor(data$Virus)
+
+#Removing if there werent exactly 2 locations
+Index <- numeric()
+
+for(i in unique(data$GameNum)){
+  
+  temp <- data %>% filter(GameNum == i)
+  temp$Location <- drop.levels(temp$Location)
+  
+  if(nlevels(temp$Location) != 2){
+    
+    Index <- append(Index, i)
+    
+  }
+}
+
+data <- data %>% filter(!(data$GameNum %in% Index))
+
+
+
+#Filtering out players who used any upgrades
+Index2 <- numeric()
+
+for(i in unique(data$GameNum)){
+  
+  temp <- data %>% filter(GameNum == i)
+  
+  if("1Fast" %in% temp$Upgrade | 
+     "1Far" %in% temp$Upgrade){
+    
+    Index2 <- append(Index2, i)
+  }
+}
+
+data <- data %>% filter(!(data$GameNum %in% Index2))
+
+#Filtering out players who have 5 or more rows
+Index3 <- numeric()
+
+for(i in unique(data$GameNum)){
+  
+  temp <- data %>% filter(GameNum == i)
+  
+  if(nrow(temp) >= 5){
+    
+    Index3 <- append(Index3, i)
+  }
+}
+  
+data <- data %>% filter(!(data$GameNum %in% Index3))
+
+
+#Filtering out players where turrets only shot at one type of virus
+Index4 <- numeric()
+
+for(i in unique(data$GameNum)){
+  
+  temp <- data %>% filter(GameNum == i)
+  temp$Virus <- drop.levels(temp$Virus)
+  
+  if(nlevels(temp$Virus) != 2){
+    
+    Index4 <- append(Index4, i)
+ 
+  }
+}
+
+data <- data %>% filter(!(data$GameNum %in% Index4))
+
+
+```
+
+
+
+```{r}
+#Making Restrucured Data frame
+#Using Full data to create certai columns
+
+#Setting up
+LocationCombination <- character()
+MedicineCombination <- character()
+Health <- numeric()
+Funds <- numeric()
+
+#Filling up vectors for the above 4 columns
+for(i in unique(data$GameNum)){
+  
+  temp <- data %>% filter(GameNum == i)
+  
+  Funds <- append(Funds, temp$Funds[1])
+  Health <- append(Health, temp$Health[1])
+  
+  #Location Combination
+  loc <- sort(unique(temp$Location))
+  LocationCombination <- append(LocationCombination, paste(loc[1], loc[2], sep = ""))
+  
+  #Medicine Combination
+  temp1 <- temp %>% filter(Location == loc[1])
+  temp2 <- temp %>% filter(Location == loc[2])
+  
+  med1st <- temp1$Medicine[1]
+  med2nd <- temp2$Medicine[1]
+  
+  med1st <- str_sub(med1st, start = 5)
+  med2nd <- str_sub(med2nd, start = 5)
+  
+  MedicineCombination <- append(MedicineCombination, paste(med1st, med2nd, sep = ""))
+  
+}
+
+```
+
+
+
+
+
+
+
+
+
+
+```{r}
+#Making Restructured Data frame
+#For Red Virus
+
+#Red Virus Data
+data_red <- data %>% filter(Virus == "red")
+data_red <- data_red %>% arrange(GameNum)
+
+#Setting up
+Destroyed_red <- numeric()
+Shot_red <- numeric()
+#Missed
+#Percent Destroyed
+
+
+#Filling up vectors to put in as columns in the data frame
+for(i in unique(data_red$GameNum)){
+  
+  temp <- data_red %>% filter(GameNum == i)
+  
+  Destroyed_red <- append(Destroyed_red, sum(temp$Destroyed))
+  Shot_red <- append(Shot_red, sum(temp$Shot))
+  
+}
+
+#Restrucured Data Red
+data_restructured_red <- data.frame(GameNum = sort(unique(data_red$GameNum)),
+                                LocationCombination = LocationCombination,
+                                MedicineCombination = MedicineCombination,
+                                Health = Health, Funds = Funds,
+                                Shot = Shot_red, Destroyed = Destroyed_red)
+
+
+#Adding Missed and Percent Destroyed Column
+data_restructured_red <- data_restructured_red %>% mutate(Missed = Shot - Destroyed,
+                                                  PercentDestroyed = (Destroyed/Shot)*100)
+
+
+```
+
+
+```{r}
+#Making Restructured Data frame
+#For Blue Virus
+
+#Blue Virus Data
+data_blue <- data %>% filter(Virus == "blue")
+data_blue <- data_blue %>% arrange(GameNum)
+
+#Setting up
+Destroyed_blue <- numeric()
+Shot_blue <- numeric()
+#Missed
+#Percent Destroyed
+
+
+#Filling up vectors to put in as columns in the data frame
+for(i in unique(data_blue$GameNum)){
+  
+  temp <- data_blue %>% filter(GameNum == i)
+  
+  Destroyed_blue <- append(Destroyed_blue, sum(temp$Destroyed))
+  Shot_blue <- append(Shot_blue, sum(temp$Shot))
+  
+}
+
+#Restrucured Data Blue
+data_restructured_blue <- data.frame(GameNum = sort(unique(data_blue$GameNum)),
+                                LocationCombination = LocationCombination,
+                                MedicineCombination = MedicineCombination,
+                                Health = Health, Funds = Funds,
+                                Shot = Shot_blue, Destroyed = Destroyed_blue)
+
+
+#Adding Missed and Percent Destroyed Column
+data_restructured_blue <- data_restructured_blue %>% mutate(Missed = Shot - Destroyed,
+                                                  PercentDestroyed = (Destroyed/Shot)*100)
+
+
+```
+
+
+
+
+
+```{r}
+#Creating Table to see all combinations
+
+#The two should be the exact same
+
+#Table for Red 
+table(data_restructured_red$LocationCombination, data_restructured_red$MedicineCombination)
+
+#Table for Blue
+table(data_restructured_blue$LocationCombination, data_restructured_blue$MedicineCombination)
+
+```
+
+
+
+```{r}
+#ANOVA
+#For Red
+
+#Destroyed
+anova_testDR <- aov(Destroyed ~ (LocationCombination  + MedicineCombination)^2, 
+                  data = data_restructured_red)
+summary(anova_testDR)
+
+
+#Shot
+anova_testSR <- aov(Shot ~ (LocationCombination  + MedicineCombination)^2, 
+                  data = data_restructured_red)
+summary(anova_testSR)
+
+
+#Percent Destroyed
+anova_testPR <- aov(PercentDestroyed ~ (LocationCombination  + MedicineCombination)^2, 
+                  data = data_restructured_red)
+summary(anova_testPR)
+
+```
+
+```{r}
+#ANOVA
+#For Blue
+
+#Destroyed
+anova_testDB <- aov(Destroyed ~ (LocationCombination  + MedicineCombination)^2, 
+                  data = data_restructured_blue)
+summary(anova_testDB)
+
+
+#Shot
+anova_testSB <- aov(Shot ~ (LocationCombination  + MedicineCombination)^2, 
+                  data = data_restructured_blue)
+summary(anova_testSB)
+
+
+#Percent Destroyed
+anova_testPB <- aov(PercentDestroyed ~ (LocationCombination  + MedicineCombination)^2, 
+                  data = data_restructured_blue)
+summary(anova_testPB)
+
+```
+
+
+
+
+```{r}
+#Interaction Plots 
+#For Red
+
+#Destroyed
+plot_destroyed_red <- interaction.plot(data_restructured_red$LocationCombination, data_restructured_red$MedicineCombination, data_restructured_red$Destroyed,
+                 main = "Interaction Plot (Red Virus)",
+                 xlab = "Location Combination",
+                 ylab = "Destroyed",
+                 trace.label = "Medicine Combo",
+                 col = c("tomato", "green", "purple", "brown"),
+                 lwd = 1.5) 
+
+
+#Shot
+plot_shot_red <- interaction.plot(data_restructured_red$LocationCombination, data_restructured_red$MedicineCombination, data_restructured_red$Shot,
+                 main = "Interaction Plot (Red Virus)",
+                 xlab = "Location Combination",
+                 ylab = "Shot",
+                 trace.label = "Medicine Combo",
+                 col = c("tomato", "green", "purple", "brown"),
+                 lwd = 1.5) 
+
+
+#Percent Destroyed
+plot_PercentDestroyed_red <- interaction.plot(data_restructured_red$LocationCombination, data_restructured_red$MedicineCombination, data_restructured_red$PercentDestroyed,
+                 main = "Interaction Plot (Red Virus)",
+                 xlab = "Location Combination",
+                 ylab = "Percent Destroyed",
+                 trace.label = "Medicine Combo",
+                 col = c("tomato", "green", "purple", "brown"),
+                 lwd = 1.5) 
+```
+
+
+
+```{r}
+#Interaction Plots 
+#For Blue
+
+#Destroyed
+plot_destroyed_blue <- interaction.plot(data_restructured_blue$LocationCombination, data_restructured_blue$MedicineCombination, data_restructured_blue$Destroyed,
+                 main = "Interaction Plot (Blue Virus)",
+                 xlab = "Location Combination",
+                 ylab = "Destroyed",
+                 trace.label = "Medicine Combo",
+                 col = c("tomato", "green", "purple", "brown"),
+                 lwd = 1.5) 
+
+#Shot
+plot_shot_blue <- interaction.plot(data_restructured_blue$LocationCombination, data_restructured_blue$MedicineCombination, data_restructured_blue$Shot,
+                 main = "Interaction Plot (Blue Virus)",
+                 xlab = "Location Combination",
+                 ylab = "Shot",
+                 trace.label = "Medicine Combo",
+                 col = c("tomato", "green", "purple", "brown"),
+                 lwd = 1.5) 
+
+
+#Percent Destroyed
+plot_shot_blue <- interaction.plot(data_restructured_blue$LocationCombination, data_restructured_blue$MedicineCombination, data_restructured_blue$PercentDestroyed,
+                 main = "Interaction Plot (Blue Virus)",
+                 xlab = "Location Combination",
+                 ylab = "Percent Destroyed",
+                 trace.label = "Medicine Combo",
+                 col = c("tomato", "green", "purple", "brown"),
+                 lwd = 1.5) 
+
+
+
+
+
+```
+
+```{r}
+#Percent Destroyed
+plot_destroyed <- interaction.plot(data_restructured$LocationCombination, data_restructured$MedicineCombination, data_restructured$Destroyed,
+                 main = "Interaction Plot",
+                 xlab = "Location Combination",
+                 ylab = "Destroyed",
+                 trace.label = "Medicine Combo",
+                 col = c("tomato", "green", "purple", "brown"),
+                 lwd = 1.5) 
+```
+
+
+
+
+
+```{r}
+#Writing to CSV
+write.csv(data_restructured_red, "~/Desktop/data3_red.csv")
+write.csv(data_restructured_blue, "~/Desktop/data3_blue.csv")
+
+```
+
+
+
+
+
+
+
