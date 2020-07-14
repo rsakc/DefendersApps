@@ -62,7 +62,7 @@ ui <- fluidPage(
                   choices =  c(all_groups),
                   multiple = TRUE,
                   selectize = TRUE,
-                  selected = "STA310"),
+                  selected = "sta310"),
       
       selectInput(inputId = "playerID",
                   label = "Player ID:",
@@ -104,7 +104,11 @@ ui <- fluidPage(
   
       checkboxInput("summary", "Show Summary Statistics (For X Variable)", FALSE),
       
-      downloadButton('downloadData', label = "Defenders Data")
+      downloadButton('downloadData', label = "Defenders Data"),
+      
+      a(h5("Instructor Details"),
+        href="https://stat2labs.sites.grinnell.edu/defenders.html", 
+        align="left", target = "_blank")
       
       
     ),
