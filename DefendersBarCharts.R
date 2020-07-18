@@ -10,7 +10,7 @@ library(tidyr)
 library(gdata)
 library(stats)
 library(curl)
- 
+  
 #Importing Data
 n <- sample(c(0,1), size = 1)
 
