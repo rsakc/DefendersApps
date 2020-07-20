@@ -1,4 +1,4 @@
-#Last Updated on July 15 2020
+#Last Updated on July 20 2020
 
 #Loading Packages
 library(shiny)
@@ -104,8 +104,9 @@ ui <- fluidPage(
                   multiple = FALSE),
       
       selectInput(inputId = "tests",
-                  label = "Statistic Tests:",
-                  choices = c("None", "Chi-Sq Test", "Two Proportion Z-Test"),
+                  label = "Statistical Tests:",
+                  choices = c("None", "Chi-Sq Test", "Two Proportion Z-Test",
+                              "Two Proportion Randomization Test", "Chi-Sq Randomization Test"),
                   selected = "None",
                   multiple = FALSE),
   
@@ -122,14 +123,20 @@ ui <- fluidPage(
     
     #Outputs
     mainPanel(
-      plotOutput(outputId = "Plot"),
-      uiOutput("header"),
-      verbatimTextOutput("chi"),
-      verbatimTextOutput("prop"),
-      tableOutput("summarytable")
-    
-   
-     
+      tabsetPanel(
+        tabPanel("General",
+                 plotOutput(outputId = "Plot"),
+                 uiOutput("header"),
+                 verbatimTextOutput("chi"),
+                 verbatimTextOutput("prop"),
+                 verbatimTextOutput("twopr"),
+                 verbatimTextOutput("chir"),
+                 tableOutput("summarytable")),
+        
+        tabPanel("Residuals", uiOutput("residualtext"),
+                 fluidRow(
+                   splitLayout(cellWidths = c("50%", "50%"), 
+                               plotOutput("rplot1"), plotOutput("rplot2")))))
     )
   )
 )
@@ -190,6 +197,9 @@ server <- function(input, output,session) {
     
     #Using Reactive Data
     plotData <- plotDataR()
+    
+    #We need data to run
+    if(nrow(plotData) > 0){
     
    
     if(input$facet != "None"){
@@ -302,9 +312,15 @@ server <- function(input, output,session) {
   
     }
 
+      
+    ##Chi Squared Test
     output$chi = renderPrint({
       
+      #Reactive Data
       plotData <- plotDataR()
+      
+      #We need data to run
+      if(nrow(plotData) > 0){
       
  
        if(input$tests == "Chi-Sq Test"){
@@ -322,30 +338,44 @@ server <- function(input, output,session) {
          chisq.test(test_data[,2:3], correct = FALSE) 
         
        } else {
-        
          "Facet must be set to None to run the chi-squared test"
-         
-      }
+       }
       
-    }
+      
+       }
+      }
     })
     
+    
     #Removing Header if chi-squared/proportions test checkbox is deselected
-    observeEvent(input$tests, {
+    observeEvent(c(input$tests, input$groupID, input$playerID), {
       
+      #Reactive Data
+      plotData <- plotDataR()
+      
+      #When test option is none
       if(input$tests == "None"){
         output$header <- renderUI({
          ""}) 
 
       }
+      
+      #When there is no data
+      if(nrow(plotData) == 0){
+        output$header <- renderUI({
+          ""}) 
+      }
     })
     
     
-    #Two proportion Z test
+    ##Two proportion Z test
     output$prop <- renderPrint({
       
       #Reactive Data
       plotData <- plotDataR()
+      
+      #We need data to run
+      if(nrow(plotData) > 0){
       
       #Setting Up
       XVariable <- plotData %>% pull(input$xvar)
@@ -383,7 +413,89 @@ server <- function(input, output,session) {
           
         }
       }
+     }
+  })
+    
+    
+    ##Two Proportion Randomization test
+    output$twopr <- renderPrint({
       
+      #Reactive Data
+      plotData <- plotDataR()
+      
+      #We need data to run
+      if(nrow(plotData) > 0){
+        
+        #Setting Up
+        XVariable <- plotData %>% pull(input$xvar)
+        XVariable <- drop.levels(as.factor(XVariable))
+        xlevel <- nlevels(XVariable)
+        
+        if(input$tests == "Two Proportion Randomization Test"){
+          
+          if(input$facet == "None"){
+            
+            if(xlevel == 2){
+      
+              output$header <- renderUI({
+                h4("Observed Table:")
+              }) 
+              
+              #Test data to use
+              test_data <- plotData %>%
+                group_by_at(input$xvar) %>%
+                summarize(Destroyed = as.integer(sum(Destroyed)), Missed = as.integer(sum(Missed)))
+              
+              #Vectors for the two groups (Destroyed/Miss)
+              group1 <- c(as.numeric(test_data[1,2]), as.numeric(test_data[1,3]))
+              group2 <- c(as.numeric(test_data[2,2]), as.numeric(test_data[2,3]))
+              
+              #Vectors for total counts of destroyed and missed
+              D <- rep("D", times = (group1[1] + group2[1]))
+              M <- rep("M", times = (group1[2] + group2[2]))
+              
+              #All counts vector
+              DM <-  c(D, M)
+              
+              #Proportions for each group
+              group1prop <- group1[1] / (group1[1] + group1[2])
+              group2prop <- group2[1] / (group2[1] + group2[2])
+            
+              #Running two proportion randomization test
+              
+              #Setting up
+              propdiff <- group1prop - group2prop
+              R <- 10000
+              results <- numeric()
+              
+              for(i in 1:R){
+                samp <- sample(DM, size = length(DM), replace = FALSE)
+                
+                samp1 <- samp[1: (group1[1] + group1[2])]
+                samp2 <- samp[(group1[1] + group1[2] + 1): length(samp)]
+              
+                prop1 <- sum(samp1 == "D") / length(samp1)
+                prop2 <- sum(samp2 == "D") / length(samp2)
+                
+                results[i] <- prop1 - prop2
+                
+              }
+              
+              pvalue <- (1 + sum(results >= abs(propdiff)) + sum(results <= -abs(propdiff))) / (R + 1)
+              
+              return(paste("P Value:", round(pvalue, 4)))
+              
+            } else{
+              "X Variable must have exactly two levels to run the two proportion randomization test."
+            }
+            
+          } else{
+            "Facet must be set to None to run the two proportion randomization test"
+          }
+          
+        }
+      }
+            
     })
     
     
@@ -392,6 +504,12 @@ server <- function(input, output,session) {
     
     #Summary table
     output$summarytable <- renderTable({
+      
+      #Reactive Data
+      plotData <- plotDataR()
+      
+      #We need data to run
+      if(nrow(plotData) > 0){
       
       if(input$summary == "TRUE"){
       
@@ -410,12 +528,13 @@ server <- function(input, output,session) {
       
       }
 
-
+      }
     })
 
    
    return(myplot)
     
+    }
 
   })
    
