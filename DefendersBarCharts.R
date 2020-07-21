@@ -1,4 +1,4 @@
-#Last Updated on July 20 2020
+#Last Updated on July 21 2020
 
 #Loading Packages
 library(shiny)
@@ -11,7 +11,7 @@ library(gdata)
 library(stats)
 library(curl)
   
-#Importing Data
+#Importing Data (Sampling to ensure that new data loads into the app quickly)
 n <- sample(c(0,1), size = 1)
 
 if(n == 0){
@@ -21,15 +21,14 @@ if(n == 0){
   data.all <- readr::read_csv("https://www.stat2games.sites.grinnell.edu/data/defenders/getdata.php") 
 }
 
-
 #Filter by Level
 data.all <- data.all %>% filter(Level > 0)
 
-#To Lower
+#Converting PlayerID and GroupID to lower case
 data.all$PlayerID <- tolower(data.all$PlayerID)
 data.all$GroupID <- tolower(data.all$GroupID)
 
-#Convering Columns to Factors
+#Convering Certain Columns to Factors
 data.all$TurretType <- as.factor(data.all$TurretType)
 data.all$Level <- as.factor(data.all$Level)
 data.all$Upgrade <- as.factor(data.all$Upgrade)
@@ -47,11 +46,11 @@ data.all <- mutate(data.all, PerDefective = Destroyed/Shot)
 #Renaming Wave to Round
 data.all <- data.all %>% rename(Round = Wave)
 
-
-
-#To use for inputs
+#Vectors to use when creating inputs in UI
 all_groups <- sort(unique(data.all$GroupID))
 all_players <- sort(unique(data.all$PlayerID))
+all_levels <- sort(unique(data.all$Level))
+
 
 
 #UI
@@ -79,20 +78,18 @@ ui <- fluidPage(
                   selected = "all"),
       
       selectInput("levels", "Level:",
-                  choices = c(1, 2, 3, 4, 5),
+                  choices = all_levels,
                   multiple = TRUE,
-                  selected = "1"),
+                  selected = all_levels[1]),
       
       selectInput(inputId = "chart",
                   label = "Chart Type:",
-                  #columns of the dataset
                   choices = c("Counts","Percent"),
                   selected = "Counts",
                   multiple = FALSE),
       
       selectInput(inputId = "xvar",
                   label = "X Variable:",
-                  #columns of the dataset
                   choices = c("Level", "Round", "Location", "TurretType", "Upgrade", "Medicine", "Virus"),
                   selected = "Medicine",
                   multiple = FALSE),
@@ -106,7 +103,7 @@ ui <- fluidPage(
       selectInput(inputId = "tests",
                   label = "Statistical Tests:",
                   choices = c("None", "Chi-Sq Test", "Two Proportion Z-Test",
-                              "Two Proportion Randomization Test", "Chi-Sq Randomization Test"),
+                              "Randomization Test"),
                   selected = "None",
                   multiple = FALSE),
   
@@ -123,24 +120,22 @@ ui <- fluidPage(
     
     #Outputs
     mainPanel(
-      tabsetPanel(
-        tabPanel("General",
-                 plotOutput(outputId = "Plot"),
-                 uiOutput("header"),
-                 verbatimTextOutput("chi"),
-                 verbatimTextOutput("prop"),
-                 verbatimTextOutput("twopr"),
-                 verbatimTextOutput("chir"),
-                 tableOutput("summarytable")),
-        
-        tabPanel("Residuals", uiOutput("residualtext"),
-                 fluidRow(
-                   splitLayout(cellWidths = c("50%", "50%"), 
-                               plotOutput("rplot1"), plotOutput("rplot2")))))
-    )
-  )
-)
-
+      
+      #Visual Output
+      plotOutput(outputId = "Plot"),
+      #Dynamic Header
+      uiOutput("header"),
+      #Chi-Squared Test
+      verbatimTextOutput("chi"),
+      #Two Proportion Z Test
+      verbatimTextOutput("prop"),
+      #Randomization Test
+      verbatimTextOutput("rt"),
+      #Summary Table
+      tableOutput("summarytable"))
+                
+    ))
+  
 
 #Server
 server <- function(input, output,session) {
@@ -160,13 +155,8 @@ server <- function(input, output,session) {
   
   
   
-  # Dynamic PlayerID Input
+  #Dynamic PlayerID Input
   observe({
-    
-    # req() requires a selection from GroupID before any output
-    # or reactivity occurs (keeps the app from crashing)
-    req(input$groupID)   
-    
     gamedata <- filter(data.all, GroupID %in% input$groupID)
     
     updateSelectInput(session, 
@@ -176,12 +166,18 @@ server <- function(input, output,session) {
   })
   
   
-  # Dynamic Level Input 
+  #Dynamic Level Input 
   observe({
-    req(input$groupID)   
     
-   
-    gamedata <- filter(data.all, GroupID %in% input$groupID)
+    #If all is selected within the PlayerID input
+    if("all" %in% input$playerID){
+      gamedata <- filter(data.all, GroupID %in% input$groupID)
+    
+    #If all is not selected within the PlayerID input
+    } else{
+      gamedata <- filter(data.all, GroupID %in% input$groupID, PlayerID %in% input$playerID)
+    }
+ 
     updateSelectInput(session, 
                       "levels",
                       choices = sort(unique(gamedata$Level)),
@@ -202,6 +198,8 @@ server <- function(input, output,session) {
     if(nrow(plotData) > 0){
     
    
+    #If facet option is not None
+    #Creating data to use for vizualization
     if(input$facet != "None"){
     vec <- c(input$xvar, input$facet)
     visual_data <- plotData %>%
@@ -209,8 +207,9 @@ server <- function(input, output,session) {
       summarize(Destroyed = sum(Destroyed), Missed = sum(Missed)) %>%
       gather("Destroyed", "Missed", key = "Indicator", value = "ShotDestroyed")
     
+    #If facet option is None
+    #Creating data to use for vizualization
     } else {
-      
       visual_data <- plotData %>%
         group_by_at(input$xvar) %>%
         summarize(Destroyed = sum(Destroyed), Missed = sum(Missed)) %>%
@@ -218,12 +217,13 @@ server <- function(input, output,session) {
     }
     
     
-    
+    #Visual for Counts and No Facet
     if(input$chart == "Counts" & input$facet == "None"){
 
+      #Creating visualization
       myplot <- ggplot(data = visual_data, aes_string(x = input$xvar, y = "ShotDestroyed")) +
         geom_bar(stat = "identity", aes(fill = Indicator), position = position_stack(reverse = TRUE)) +
-        labs(x = input$xvar, y = "Counts", title = paste("Plot of Shot vs Destroyed by",input$xvar, "in Counts")) +
+        labs(x = input$xvar, y = "Counts", title = paste("Plot of Missed and Destroyed by",input$xvar, "in Counts")) +
         theme_bw() +
         theme(axis.text.x = element_text(size = 18, angle = 40, hjust = 1), 
               axis.title = element_text(size = 20), 
@@ -233,12 +233,12 @@ server <- function(input, output,session) {
               axis.text.y = element_text(size = 14)) +
         scale_fill_manual(values = c("Destroyed" = "steelblue2", "Missed" = "snow3")) +
         guides(fill = guide_legend(reverse = TRUE))
- 
-      
     }
     
+    #Visual for Percent and No Facet
      if(input$chart == "Percent" & input$facet == "None"){
 
+      #Creating additional columns to use for vizualization
       total <- visual_data %>%
         group_by_at(input$xvar) %>%
         summarize(Total = sum(ShotDestroyed))
@@ -246,11 +246,11 @@ server <- function(input, output,session) {
       visual_data_p <- inner_join(visual_data, total) %>%
         mutate(Percent = ShotDestroyed/Total)
 
-
+      #Creating visualization
       myplot <- ggplot(data = visual_data_p, aes_string(x = input$xvar, y = "Percent")) +
         geom_bar(stat = "identity", aes(fill = Indicator), position = position_stack(reverse = TRUE)) +
         scale_y_continuous(labels = scales::percent) +
-        labs(x = input$xvar, y = "Percent", title = paste("Plot of Shot vs Destroyed by",input$xvar, "in Percent")) +
+        labs(x = input$xvar, y = "Percent", title = paste("Plot of Missed and Destroyed by",input$xvar, "in Percent")) +
         theme_bw() +
         theme(axis.text.x = element_text(size = 18, angle = 40, hjust = 1), 
               axis.title = element_text(size = 20), 
@@ -260,14 +260,15 @@ server <- function(input, output,session) {
               axis.text.y = element_text(size = 14)) +
         scale_fill_manual(values = c("Destroyed" = "steelblue2", "Missed" = "snow3")) +
         guides(fill = guide_legend(reverse = TRUE))
-     
     }
     
+    #Visual for Counts and Facet option is selected
     if(input$facet != "None" & input$chart == "Counts"){
 
+      #Creating visualization
       myplot <- ggplot(data = visual_data, aes_string(x = input$xvar, y = "ShotDestroyed")) +
         geom_bar(stat = "identity", aes(fill = Indicator), position = position_stack(reverse = TRUE)) +
-        labs(x = input$xvar, y = "Counts", title = paste("Plot of Shot vs Destroyed by",input$xvar, "in Counts")) +
+        labs(x = input$xvar, y = "Counts", title = paste("Plot of Missed and Destroyed by",input$xvar, "and Faceted by", input$facet,"in Counts")) +
         theme_bw() +
         theme(axis.text.x = element_text(size = 18, angle = 40, hjust = 1), 
               axis.title = element_text(size = 20), 
@@ -279,11 +280,12 @@ server <- function(input, output,session) {
        theme(strip.text = element_text(size = 16)) +
         scale_fill_manual(values = c("Destroyed" = "steelblue2", "Missed" = "snow3")) +
         guides(fill = guide_legend(reverse = TRUE))
-   
       }
     
+    #Visual for Percent and Facet option is selected
     if(input$facet != "None" & input$chart == "Percent"){
       
+      #Creating additional columns to use for vizualization
       vec <- c(input$xvar, input$facet)
       
       total_f <- visual_data %>%
@@ -293,10 +295,11 @@ server <- function(input, output,session) {
       visual_data_f <- inner_join(visual_data, total_f) %>%
         mutate(Percent = ShotDestroyed/Total)
       
+      #Creating visualization
       myplot <- ggplot(data = visual_data_f, aes_string(x = input$xvar, y = "Percent")) +
         geom_bar(stat = "identity", aes(fill = Indicator), position = position_stack(reverse = TRUE)) +
         scale_y_continuous(labels = scales::percent) +
-        labs(x = input$xvar, y = "Percent", title = paste("Plot of Shot vs Destroyed by",input$xvar, "in Percent")) +
+        labs(x = input$xvar, y = "Percent", title = paste("Plot of Missed and Destroyed by",input$xvar, "and Faceted by", input$facet, "in Percent")) +
         theme_bw() +
         theme(axis.text.x = element_text(size = 18, angle = 40, hjust = 1), 
               axis.title = element_text(size = 20), 
@@ -308,8 +311,6 @@ server <- function(input, output,session) {
         theme(strip.text = element_text(size = 16)) +
         scale_fill_manual(values = c("Destroyed" = "steelblue2", "Missed" = "snow3")) +
         guides(fill = guide_legend(reverse = TRUE))
-        
-  
     }
 
       
@@ -322,33 +323,35 @@ server <- function(input, output,session) {
       #We need data to run
       if(nrow(plotData) > 0){
       
- 
+       #Test option is chi-squared test
        if(input$tests == "Chi-Sq Test"){
          
+         #If Facet option is none
          if(input$facet == "None"){
            
+          #Creating header 
           output$header <- renderUI({
             h4("Observed Table:")
           }) 
 
+         #Creating data to use for the test
          test_data <- plotData %>%
            group_by_at(input$xvar) %>%
            summarize(Destroyed = sum(Destroyed), Missed = sum(Missed))
           
+         #Running chi-squared test
          chisq.test(test_data[,2:3], correct = FALSE) 
         
        } else {
          "Facet must be set to None to run the chi-squared test"
        }
-      
-      
        }
       }
     })
     
     
-    #Removing Header if chi-squared/proportions test checkbox is deselected
-    observeEvent(c(input$tests, input$groupID, input$playerID), {
+    #Removing Header when appropriate
+    observeEvent(c(input$tests, input$groupID, input$playerID, input$levels), {
       
       #Reactive Data
       plotData <- plotDataR()
@@ -357,7 +360,6 @@ server <- function(input, output,session) {
       if(input$tests == "None"){
         output$header <- renderUI({
          ""}) 
-
       }
       
       #When there is no data
@@ -382,16 +384,21 @@ server <- function(input, output,session) {
       XVariable <- drop.levels(as.factor(XVariable))
       xlevel <- nlevels(XVariable)
       
+      #Test option is two proportion z-test
       if(input$tests == "Two Proportion Z-Test"){
         
+        #Facet option is none
         if(input$facet == "None"){
           
+          #There are exactly 2 levels for the x variable
           if(xlevel == 2){
           
+          #Creating header
           output$header <- renderUI({
             h4("Observed Table:")
           }) 
           
+          #Creating data to use for the test
           test_data <- plotData %>%
             group_by_at(input$xvar) %>%
             summarize(Destroyed = sum(Destroyed), Missed = sum(Missed)) %>%
@@ -400,15 +407,14 @@ server <- function(input, output,session) {
           Destroyed <- test_data$Destroyed
           Total <- test_data$Total
           
+          #Running the two proportion z test
           prop.test(Destroyed, Total, correct = FALSE)
           
           } else{
-            
             "X Variable must have exactly two levels to run the two proportion z-test."
           }
         
         } else {
-          
           "Facet must be set to None to run the two proportion z-test"
           
         }
@@ -417,8 +423,8 @@ server <- function(input, output,session) {
   })
     
     
-    ##Two Proportion Randomization test
-    output$twopr <- renderPrint({
+    ##Randomization Test
+    output$rt <- renderPrint({
       
       #Reactive Data
       plotData <- plotDataR()
@@ -431,75 +437,110 @@ server <- function(input, output,session) {
         XVariable <- drop.levels(as.factor(XVariable))
         xlevel <- nlevels(XVariable)
         
-        if(input$tests == "Two Proportion Randomization Test"){
+        #Test option is the randomization test
+        if(input$tests == "Randomization Test"){
           
+          #Facet option is none
           if(input$facet == "None"){
             
-            if(xlevel == 2){
-      
+            #There is more than 1 level for the x variable
+            if(xlevel > 1){
+            
+              #Creating header
               output$header <- renderUI({
                 h4("Observed Table:")
               }) 
               
-              #Test data to use
+              #Test data to use for the randomization test
               test_data <- plotData %>%
                 group_by_at(input$xvar) %>%
-                summarize(Destroyed = as.integer(sum(Destroyed)), Missed = as.integer(sum(Missed)))
+                summarize(Destroyed = as.integer(sum(Destroyed)), Missed = as.integer(sum(Missed))) %>%
+                mutate(Total = Destroyed + Missed) %>%
+                mutate(ProportionD = Destroyed/Total)
               
-              #Vectors for the two groups (Destroyed/Miss)
-              group1 <- c(as.numeric(test_data[1,2]), as.numeric(test_data[1,3]))
-              group2 <- c(as.numeric(test_data[2,2]), as.numeric(test_data[2,3]))
-              
-              #Vectors for total counts of destroyed and missed
-              D <- rep("D", times = (group1[1] + group2[1]))
-              M <- rep("M", times = (group1[2] + group2[2]))
+              #Vector for total counts of destroyed and missed
+              D <- rep("D", times = sum(test_data$Destroyed))
+              M <- rep("M", times = sum(test_data$Missed))
               
               #All counts vector
-              DM <-  c(D, M)
-              
-              #Proportions for each group
-              group1prop <- group1[1] / (group1[1] + group1[2])
-              group2prop <- group2[1] / (group2[1] + group2[2])
+              DM <- c(D, M)
             
-              #Running two proportion randomization test
+              #Running the randomization test
               
-              #Setting up
-              propdiff <- group1prop - group2prop
+              ##Setting up
+              
+              #Test statistic
+              maxdiff <- max(test_data$ProportionD) - min(test_data$ProportionD)
+              #Number of replications
               R <- 10000
+              #Vector to store results
               results <- numeric()
               
+              #Repeating the process R times
               for(i in 1:R){
+                
+                #Permuting the individual observations of Destroyed and Misses
                 samp <- sample(DM, size = length(DM), replace = FALSE)
                 
-                samp1 <- samp[1: (group1[1] + group1[2])]
-                samp2 <- samp[(group1[1] + group1[2] + 1): length(samp)]
+                #Vector to store proportions temporarily
+                proportions <- numeric()
+                
+                #Going through each row in the data to use for the randomization test
+                for(j in 1:nrow(test_data)){
+                  
+                  #For first group
+                  if(j == 1){
+                    
+                    #Getting observations for first group
+                    observations <- samp[1 : test_data$Total[j]]
+                    
+                    #Storing the percent destroyed for first group
+                    proportions[j] <- sum(observations == "D") / length(observations)
+                    
+                    #Sum to use for splitting data for remaining groups
+                    sum <- test_data$Total[j]
+                    
+                  #For remaining groups
+                  } else{
+                
+                  #Starting index
+                  first <- (sum + 1)
+                  
+                  #Ending index
+                  second <- (first - 1 + test_data$Total[j])
+                  
+                  #Getting observations for the particular group
+                  observations <- samp[first:second]
+                  
+                  #Storing the percent destroyed for the particular group
+                  proportions[j] <- sum(observations == "D") / length(observations)
               
-                prop1 <- sum(samp1 == "D") / length(samp1)
-                prop2 <- sum(samp2 == "D") / length(samp2)
-                
-                results[i] <- prop1 - prop2
-                
+                  #Updating sum to use for splitting data for remaining groups
+                  sum <- sum + test_data$Total[j]
+                  }
+                }
+            
+                #Calculating max difference in proportions for the replication and storing result
+                results[i] <- max(proportions) - min(proportions)
               }
               
-              pvalue <- (1 + sum(results >= abs(propdiff)) + sum(results <= -abs(propdiff))) / (R + 1)
+              #P Value
+              pvalue <- (1 + sum(results >= abs(maxdiff)) + sum(results <= -abs(maxdiff))) / (R + 1)
               
+              #Returning P Value
               return(paste("P Value:", round(pvalue, 4)))
               
             } else{
-              "X Variable must have exactly two levels to run the two proportion randomization test."
-            }
-            
+              "At least 2 levels are needed to run the randomization test."
+            }    
+              
           } else{
-            "Facet must be set to None to run the two proportion randomization test"
+            "Facet must be set to None to run the randomization test."
           }
-          
+     
         }
       }
-            
     })
-    
-    
-    
     
     
     #Summary table
@@ -511,34 +552,32 @@ server <- function(input, output,session) {
       #We need data to run
       if(nrow(plotData) > 0){
       
+      #Checkbox for summary table is selected
       if(input$summary == "TRUE"){
       
+      #If facet option is selected
       if(input$facet != "None"){
         vec <- c(input$xvar, input$facet)
         visual_data <- plotData %>%
           group_by_at(vec) %>%
           summarize(Destroyed = as.integer(sum(Destroyed)), Missed = as.integer(sum(Missed)))
         
-        
+      #If facet option is None 
       } else {
         visual_data <- plotData %>%
           group_by_at(input$xvar) %>%
           summarize(Destroyed = as.integer(sum(Destroyed)), Missed = as.integer(sum(Missed)))
       }
-      
-      }
-
-      }
-    })
-
-   
-   return(myplot)
-    
     }
+   }
+  })
 
+   #Returning visualization
+   return(myplot)
+    }
   })
    
-  
+  #Download data 
   output$downloadData <- downloadHandler(
     filename = function() {
       paste('Data-', Sys.Date(), '.csv', sep="")
@@ -548,9 +587,8 @@ server <- function(input, output,session) {
       
     })
     
-  
+#Closes server
 }
-
 
 #Creating Shiny App
 shinyApp(ui = ui, server = server)
