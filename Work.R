@@ -17,7 +17,7 @@ test3 <- test3 %>%
   mutate(Percentage = B/Total)
 
 test4 <- data.all %>%
-  group_by(Virus) %>%
+  group_by(Virus, Medicine) %>%
   summarize(Missed = sum(Missed), Destroyed = sum(Destroyed)) %>%
   gather("Missed", "Destroyed", key = "Indicator", value = "ShotDestroyed")
 
